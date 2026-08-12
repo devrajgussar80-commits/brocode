@@ -1,0 +1,16 @@
+node_modules/
+.venv/
+backend/*.db
+backend/*.db-*
+dist/
+work/
+outputs/
+backend/__pycache__/
+backend/withdrawal_receipts/
+backend/bank_data_key
+backend/admin_token
+.env
+.env.*
+!.env.example
+
+.vercel

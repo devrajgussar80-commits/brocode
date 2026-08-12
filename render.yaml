@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: nivesh-mini-app
+    runtime: docker
+    plan: free
+    envVars:
+      - key: NIVESH_ADMIN_TOKEN
+        generateValue: true
+      - key: ALLOWED_ORIGINS
+        sync: false
+      - key: NIVESH_DB_PATH
+        value: /tmp/nivesh.db
+      - key: PUBLIC_DEMO
+        value: "true"

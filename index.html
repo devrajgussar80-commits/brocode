@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#050506" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="description" content="BroCode — secure account, wallet, plans and application management." />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="BroCode" />
+    <meta property="og:title" content="BroCode" />
+    <meta property="og:description" content="Open BroCode to access your account, wallet and plans." />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="BroCode" />
+    <meta name="twitter:description" content="Open BroCode to access your account, wallet and plans." />
+    <link rel="icon" type="image/png" href="/brand/favicon.png" />
+    <link rel="apple-touch-icon" href="/brand/brocode-icon.png" />
+    <meta property="og:image" content="/brand/brocode-icon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="preload" as="image" href="/assets/plan-starter-wealth-mobile-fast.jpg" fetchpriority="high" />
+    <title>BroCode</title>
+    <style>
+      /* Boot styles — keep the first paint dark so there is no white flash. */
+      html { background: #050506; color-scheme: dark; font-family: Archivo, Inter, system-ui, -apple-system, "Segoe UI", sans-serif; }
+      body { margin: 0; min-height: 100vh; background: #050506; color: #F3F3F5; }
+      button, input { font: inherit; }
+      #root:empty::after {
+        content: "";
+        position: fixed;
+        left: 50%;
+        top: 50%;
+        width: 42px;
+        height: 42px;
+        margin: -21px 0 0 -21px;
+        border-radius: 50%;
+        border: 3px solid #2B2B33;
+        border-top-color: #FFC400;
+        animation: boot-spin .8s linear infinite;
+      }
+      @keyframes boot-spin { to { transform: rotate(360deg); } }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
