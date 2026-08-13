@@ -33,6 +33,25 @@ TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
 TELEGRAM_WEBHOOK_SECRET = os.getenv("TELEGRAM_WEBHOOK_SECRET", "").strip()
 PUBLIC_APP_URL = os.getenv("PUBLIC_APP_URL", "https://speedaccountingdevraj.pythonanywhere.com/").strip()
 DEFAULT_TELEGRAM_URL = "https://t.me/BajjajFinanceDigitalService"
+# Amount chips offered on the recharge screen. Stored as a comma-separated
+# setting so admins can edit, add and remove them without a deploy.
+DEFAULT_RECHARGE_PRESETS = "100,570,1000,1970,5000"
+MAX_RECHARGE_PRESETS = 8
+
+
+def parse_recharge_presets(raw: str | None) -> list[int]:
+    values: list[int] = []
+    for chunk in (raw or DEFAULT_RECHARGE_PRESETS).split(","):
+        chunk = chunk.strip()
+        if not chunk:
+            continue
+        try:
+            amount = int(chunk)
+        except ValueError:
+            continue
+        if 1 <= amount <= 100000 and amount not in values:
+            values.append(amount)
+    return values or [int(x) for x in DEFAULT_RECHARGE_PRESETS.split(",")]
 REFERRAL_BONUS = 50
 SIGNUP_BONUS = 50
 WITHDRAWAL_FEE_PERCENT = 5
@@ -167,6 +186,7 @@ def init_db():
         con.execute("INSERT OR IGNORE INTO app_settings(key,value,updated_at) VALUES('telegram_url',?,?)", (DEFAULT_TELEGRAM_URL,now_iso()))
         con.execute("INSERT OR IGNORE INTO app_settings(key,value,updated_at) VALUES('minimum_recharge','100',?)", (now_iso(),))
         con.execute("INSERT OR IGNORE INTO app_settings(key,value,updated_at) VALUES('first_recharge_amount','100',?)", (now_iso(),))
+        con.execute("INSERT OR IGNORE INTO app_settings(key,value,updated_at) VALUES('recharge_presets',?,?)", (DEFAULT_RECHARGE_PRESETS,now_iso()))
         con.execute("INSERT INTO app_settings(key,value,updated_at) VALUES('payment_qr_mode','uploaded',?) ON CONFLICT(key) DO UPDATE SET value='uploaded',updated_at=excluded.updated_at", (now_iso(),))
         if con.execute("SELECT COUNT(*) FROM plan_catalog").fetchone()[0] == 0:
             for sort_order, (plan_id, plan) in enumerate(PLANS.items()):

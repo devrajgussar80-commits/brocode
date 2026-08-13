@@ -2260,6 +2260,63 @@ tbody tr:hover { background: rgba(255, 196, 0, .045); }
 tbody tr:last-child td { border-bottom: 0; }
 .admin-row-checkbox, input[type="checkbox"] { accent-color: var(--bc-gold); width: 17px; height: 17px; }
 
+/* --- Admin table readability -------------------------------------------------
+   Cells hold compound controls (badge + explanation + action button). Without an
+   explicit stack they run together on one line and collide, and the shared card
+   padding above is far too heavy inside a <td>. */
+tbody td { vertical-align: top; line-height: 1.45; }
+tbody td > b { display: block; }
+tbody td small { display: block; margin-top: 3px; color: var(--bc-muted-2); font-size: 10.5px; line-height: 1.4; }
+
+.vip-access-control,
+.login-access-control,
+.withdrawal-access-control {
+  display: grid;
+  gap: 7px;
+  justify-items: start;
+  align-content: start;
+  min-width: 186px;
+  margin: 0;
+  padding: 10px;
+  border-radius: 12px;
+}
+.vip-access-control small,
+.login-access-control small,
+.withdrawal-access-control small {
+  margin: 0;
+  font-size: 10.5px;
+  line-height: 1.4;
+  color: var(--bc-muted-2);
+}
+.vip-access-control > .status,
+.login-access-control > .status,
+.withdrawal-access-control > .status { white-space: nowrap; }
+.vip-access-control button,
+.login-access-control button,
+.withdrawal-access-control button {
+  width: 100%;
+  min-height: 36px;
+  padding: 8px 10px;
+  font-size: 11px;
+  white-space: normal;
+  line-height: 1.25;
+}
+
+/* Stacked row actions (Disable / Delete ID) */
+.row-actions {
+  display: grid;
+  gap: 7px;
+  min-width: 128px;
+  align-content: start;
+}
+.row-actions button { width: 100%; min-height: 36px; padding: 8px 10px; font-size: 11px; }
+
+/* Identity column: keep the name, phone and email on separate lines */
+tbody td > b + small,
+tbody td .customer-id { display: block; }
+.admin-user-table td:first-child, .admin-user-day-table td:first-child { white-space: nowrap; }
+tbody td code { display: inline-block; max-width: 168px; overflow-wrap: anywhere; white-space: normal; }
+
 .admin-plan-editor, .admin-qr-card, .admin-crypto-wallet, .admin-notification-manager, .admin-company-settings, .admin-telegram-settings, .admin-welcome-settings,
 .admin-home-banner-settings, .admin-balance-control, .admin-receipt-time-control, .admin-security-center, .admin-password-panel,
 .admin-request-filters, .admin-daily-users, .admin-crypto-manager, .admin-support-inbox, .admin-visitor-analytics, .admin-recovery-card,
@@ -2419,20 +2476,385 @@ tbody tr:last-child td { border-bottom: 0; }
 .admin-security-center > header button:not([class]),
 .admin-password-panel > header button:not([class]) { width: 42px; min-width: 42px; padding: 0; }
 .admin-security-center > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
-.visitor-chart { display: flex; align-items: flex-end; gap: 5px; height: 130px; padding-top: 14px; }
-.visitor-chart > * {
-  flex: 1;
-  min-width: 5px;
-  border-radius: 4px 4px 0 0;
-  background: linear-gradient(180deg, var(--bc-gold), var(--bc-gold-deep));
-  transform-origin: bottom;
-  animation: bc-bar .6s var(--bc-ease) both;
-  transition: filter .2s;
+/* Horizontal bar list, one row per day. Each <article> is
+   [bar track][count][date][unique], reordered into readable columns. */
+.visitor-chart {
+  display: grid;
+  gap: 4px;
+  max-height: 360px;
+  overflow-y: auto;
+  margin-top: 14px;
+  padding-right: 4px;
 }
-.visitor-chart > *:hover { filter: brightness(1.25); }
+.visitor-chart article {
+  display: grid;
+  grid-template-columns: minmax(88px, 96px) minmax(0, 1fr) 40px minmax(64px, 72px);
+  align-items: center;
+  gap: 10px;
+  padding: 5px 7px;
+  border-radius: 8px;
+  transition: background .2s;
+}
+.visitor-chart article:hover { background: rgba(255, 196, 0, .07); }
+/* date */
+.visitor-chart article small {
+  grid-column: 1;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--bc-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* bar track */
+.visitor-chart article > div {
+  grid-column: 2;
+  height: 9px;
+  border-radius: 999px;
+  background: var(--bc-surface-3);
+  overflow: hidden;
+}
+.visitor-chart article > div > span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--bc-gold-deep), var(--bc-gold));
+  transform-origin: left;
+  animation: bc-bar .6s var(--bc-ease) both;
+}
+/* visit count */
+.visitor-chart article b {
+  grid-column: 3;
+  font-family: var(--bc-display);
+  font-weight: 400;
+  font-size: 15px;
+  color: var(--bc-white);
+  text-align: right;
+}
+/* unique visitors */
+.visitor-chart article em {
+  grid-column: 4;
+  font-style: normal;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--bc-muted-2);
+  white-space: nowrap;
+  text-align: right;
+}
 .phone-message-color-grid, .admin-column-colors { display: flex; flex-wrap: wrap; gap: 8px; }
 .phone-message-list { display: grid; gap: 9px; }
 .phone-message-meta-grid, .admin-receipt-edit-fields, .admin-balance-form, .admin-receipt-wallet-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+
+/* ---------- 20a. ADMIN OVERVIEW — INNER STRUCTURE ----------
+   Every card below nests its own header/label/value/icon elements. Styling only
+   the outer container leaves those children in inline flow, which is what made
+   the overview read as run-together text. */
+
+.admin-shell { min-height: 100vh; min-height: 100dvh; }
+
+/* Stat cards: label, value, sub-label, icon */
+.admin-stats article { position: relative; padding-right: 56px; }
+.admin-stats article > span { display: block; font-size: 10px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: var(--bc-muted-2); }
+.admin-stats article > strong { display: block; margin: 7px 0 4px; font-family: var(--bc-display); font-weight: 400; font-size: 28px; line-height: 1; color: var(--bc-white); }
+.admin-stats article > small { display: block; font-size: 11px; line-height: 1.4; color: var(--bc-muted); }
+.admin-stats .admin-stat-icon { position: absolute; top: 16px; right: 16px; margin: 0; }
+
+/* Command hero */
+.overview-command-hero { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 18px; }
+.overview-command-hero > div:first-child { flex: 1 1 320px; min-width: 0; }
+.overview-eyebrow { display: inline-flex; align-items: center; gap: 7px; }
+.overview-eyebrow svg { width: 15px; }
+.overview-command-hero p { margin: 8px 0 0; max-width: 62ch; font-size: 13px; line-height: 1.6; color: var(--bc-muted); }
+.overview-hero-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.needs-attention, .all-clear {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 8px 13px; border-radius: 999px;
+  font-size: 11px; font-weight: 800; letter-spacing: .05em; white-space: nowrap;
+}
+.needs-attention { border: 1px solid rgba(255, 176, 32, .4); background: rgba(255, 176, 32, .1); color: var(--bc-amber); }
+.all-clear { border: 1px solid rgba(36, 208, 122, .4); background: rgba(36, 208, 122, .1); color: var(--bc-green); }
+.needs-attention i, .all-clear i { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.needs-attention i { animation: bc-pulse-ring 2s infinite; }
+
+/* Section headings */
+.overview-section-heading { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 10px; margin: 4px 0 0; }
+.overview-section-heading > div { min-width: 0; }
+.overview-section-heading span { font-size: 10px; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; color: var(--bc-gold); }
+.overview-section-heading h3 { margin: 5px 0 0; font-size: 19px; color: var(--bc-white); }
+.overview-section-heading > small { font-size: 11px; color: var(--bc-muted-2); }
+
+/* Priority queue cards */
+.overview-priority-card {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) 18px;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 15px;
+  border: 1px solid var(--bc-line);
+  border-radius: var(--bc-r);
+  background: linear-gradient(160deg, var(--bc-surface-2), var(--bc-surface));
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color .25s, transform .25s var(--bc-ease), box-shadow .25s;
+}
+.overview-priority-card:hover { transform: translateY(-3px); border-color: rgba(255, 196, 0, .4); box-shadow: var(--bc-shadow-gold); }
+.overview-priority-card > i { display: grid; place-items: center; width: 42px; height: 42px; border-radius: 12px; }
+.overview-priority-card > i svg { width: 19px; }
+.overview-priority-card > div { min-width: 0; display: flex; flex-direction: column; }
+.overview-priority-card span { font-size: 10px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--bc-muted-2); }
+.overview-priority-card strong { margin: 4px 0 2px; font-family: var(--bc-display); font-weight: 400; font-size: 24px; line-height: 1; color: var(--bc-white); }
+.overview-priority-card small { font-size: 11px; color: var(--bc-muted); }
+.overview-priority-card > svg { width: 18px; color: var(--bc-muted-2); }
+.overview-priority-card.green  > i { background: rgba(36, 208, 122, .13); border: 1px solid rgba(36, 208, 122, .32); color: var(--bc-green); }
+.overview-priority-card.purple > i { background: rgba(168, 130, 255, .13); border: 1px solid rgba(168, 130, 255, .32); color: #C4A6FF; }
+.overview-priority-card.blue   > i { background: rgba(43, 122, 255, .13); border: 1px solid rgba(43, 122, 255, .32); color: #7FB0FF; }
+.overview-priority-card.amber  > i { background: rgba(255, 176, 32, .13); border: 1px solid rgba(255, 176, 32, .32); color: var(--bc-amber); }
+
+/* Metric tiles */
+.overview-metric-grid article { position: relative; padding-right: 50px; }
+.overview-metric-grid article > span { display: block; font-size: 10px; font-weight: 800; letter-spacing: .11em; text-transform: uppercase; color: var(--bc-muted-2); }
+.overview-metric-grid article > strong { display: block; margin: 7px 0 4px; font-family: var(--bc-display); font-weight: 400; font-size: 25px; line-height: 1; color: var(--bc-white); }
+.overview-metric-grid article > small { display: block; font-size: 11px; color: var(--bc-muted); }
+.overview-metric-grid article > svg { position: absolute; top: 16px; right: 16px; width: 19px; color: var(--bc-gold-deep); }
+
+/* Card headers shared by activity / quick tools / system status */
+.overview-card > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+.overview-card > header > div { min-width: 0; }
+.overview-card > header span { font-size: 10px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; color: var(--bc-gold); }
+.overview-card > header h3 { margin: 5px 0 0; font-size: 17px; color: var(--bc-white); }
+.overview-card > header > button { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+
+/* Activity feed */
+.overview-activity-list { display: grid; gap: 6px; max-height: 420px; overflow-y: auto; }
+.overview-activity-list button {
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  padding: 11px 12px;
+  border: 1px solid transparent;
+  border-radius: 11px;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background .2s, border-color .2s;
+}
+.overview-activity-list button:hover { background: rgba(255, 255, 255, .035); border-color: var(--bc-line); }
+.activity-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--bc-muted-2); }
+.activity-dot.new-user { background: #7FB0FF; }
+.activity-dot.recharge { background: var(--bc-green); }
+.activity-dot.withdrawal { background: var(--bc-amber); }
+.activity-dot.referral { background: #C4A6FF; }
+.overview-activity-list button > div:not(.activity-meta) { display: flex; flex-direction: column; min-width: 0; }
+.overview-activity-list button b { font-size: 12.5px; color: var(--bc-text); }
+.overview-activity-list button > div > span { margin-top: 2px; font-size: 11px; color: var(--bc-muted-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.activity-meta { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; white-space: nowrap; }
+.activity-meta strong { font-family: var(--bc-display); font-weight: 400; font-size: 14px; color: var(--bc-gold); }
+.activity-meta small { font-size: 10px; color: var(--bc-muted-2); }
+
+/* Quick tools */
+.overview-quick-tools > div { display: grid; gap: 6px; }
+.overview-quick-tools > div > button {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) 16px;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  padding: 10px 11px;
+  border: 1px solid transparent;
+  border-radius: 11px;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background .2s, border-color .2s;
+}
+.overview-quick-tools > div > button:hover { background: rgba(255, 196, 0, .07); border-color: rgba(255, 196, 0, .3); }
+.overview-quick-tools i { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 10px; border: 1px solid rgba(255, 196, 0, .28); background: rgba(255, 196, 0, .1); color: var(--bc-gold); }
+.overview-quick-tools i svg { width: 17px; }
+.overview-quick-tools span { display: flex; flex-direction: column; min-width: 0; }
+.overview-quick-tools b { font-size: 12.5px; color: var(--bc-text); }
+.overview-quick-tools small { margin-top: 2px; font-size: 10.5px; color: var(--bc-muted-2); }
+.overview-quick-tools > div > button > svg { width: 16px; color: var(--bc-muted-2); }
+
+/* System status rows */
+.overview-system-status > div { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; border-top: 1px solid var(--bc-line-soft); font-size: 12px; }
+.overview-system-status > div:first-of-type { border-top: 0; }
+.overview-system-status > div > span { display: inline-flex; align-items: center; gap: 8px; color: var(--bc-muted); }
+.overview-system-status > div svg { width: 15px; color: var(--bc-gold-deep); }
+.overview-system-status b { color: var(--bc-text); white-space: nowrap; }
+
+/* Tab count badges */
+.admin-tabs button > span {
+  display: inline-grid;
+  place-items: center;
+  min-width: 20px;
+  height: 19px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .1);
+  font-size: 10px;
+  font-weight: 800;
+}
+.admin-tabs button.active > span { background: rgba(0, 0, 0, .22); color: #0A0A0C; }
+
+/* Status pills used across tables and the activity feed */
+.status.active, .status.approved, .status.paid, .status.online { background: rgba(36, 208, 122, .14); border: 1px solid rgba(36, 208, 122, .4); color: var(--bc-green); }
+.status.requested, .status.awaiting_utr, .status.pending { background: rgba(255, 176, 32, .14); border: 1px solid rgba(255, 176, 32, .4); color: var(--bc-amber); }
+.status.failed, .status.rejected, .status.disabled { background: rgba(255, 46, 46, .14); border: 1px solid rgba(255, 46, 46, .4); color: #FF8A8A; }
+.admin-security-message { font-size: 12px; color: var(--bc-muted); line-height: 1.55; }
+.receipt-reference-field { display: grid; gap: 6px; }
+.spin { animation: bc-spin 1s linear infinite; }
+
+/* ---------- 20b. SUPPORT INBOX ---------- */
+/* aside (list) | section (thread). Both need explicit layout: with only card
+   padding their children fall back to inline flow and overlap. */
+.admin-support-inbox {
+  display: grid;
+  grid-template-columns: minmax(240px, 300px) minmax(0, 1fr);
+  gap: 14px;
+  padding: 0;
+  overflow: hidden;
+}
+.admin-support-list {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border-right: 1px solid var(--bc-line);
+  background: var(--bc-surface);
+  border-radius: var(--bc-r) 0 0 var(--bc-r);
+}
+.admin-support-list > header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px;
+  border-bottom: 1px solid var(--bc-line-soft);
+}
+.admin-support-list > header svg { width: 19px; color: var(--bc-gold); flex: 0 0 auto; }
+.admin-support-list > header span { display: flex; flex-direction: column; min-width: 0; }
+.admin-support-list > header b { font-family: var(--bc-display); font-weight: 400; font-size: 15px; text-transform: uppercase; color: var(--bc-white); }
+.admin-support-list > header small { margin-top: 2px; font-size: 10.5px; color: var(--bc-muted-2); }
+.admin-support-search { display: flex; align-items: center; gap: 8px; margin: 12px; padding: 0 12px; border: 1px solid var(--bc-line); border-radius: 10px; background: var(--bc-surface-2); }
+.admin-support-search svg { width: 16px; flex: 0 0 auto; color: var(--bc-muted-2); }
+.admin-support-search input { flex: 1; min-width: 0; height: 42px; min-height: 0; border: 0; background: transparent; padding: 0; }
+/* the conversation list itself */
+.admin-support-list > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 0 8px 10px;
+  overflow-y: auto;
+  max-height: 46dvh;
+}
+.admin-support-list > div > button {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  column-gap: 10px;
+  row-gap: 2px;
+  width: 100%;
+  padding: 10px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background .2s, border-color .2s;
+}
+.admin-support-list > div > button:hover { background: rgba(255, 255, 255, .04); }
+.admin-support-list > div > button.active { background: rgba(255, 196, 0, .1); border-color: rgba(255, 196, 0, .4); }
+.admin-support-list > div > button .admin-support-avatar { grid-row: 1 / span 2; align-self: center; }
+.admin-support-list > div > button b { grid-column: 2; font-size: 12.5px; color: var(--bc-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.admin-support-list > div > button small,
+.admin-support-list > div > button span {
+  grid-column: 2;
+  font-size: 10.5px;
+  color: var(--bc-muted-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-support-thread {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 0;
+  background: var(--bc-surface);
+  border-radius: 0 var(--bc-r) var(--bc-r) 0;
+}
+.admin-support-thread > header {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 14px;
+  border-bottom: 1px solid var(--bc-line-soft);
+}
+.admin-support-thread > header > div { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.admin-support-thread > header b { font-size: 14px; color: var(--bc-white); }
+.admin-support-thread > header small { margin-top: 2px; font-size: 11px; color: var(--bc-muted-2); overflow-wrap: anywhere; }
+.admin-support-live { flex: 0 0 auto; white-space: nowrap; }
+
+.admin-support-messages { flex: 1; display: flex; flex-direction: column; gap: 8px; padding: 14px; min-height: 220px; max-height: 46dvh; overflow-y: auto; }
+.admin-support-message {
+  max-width: 78%;
+  padding: 9px 12px 7px;
+  border-radius: 12px;
+  font-size: 13px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.admin-support-message small { display: block; margin-top: 3px; font-size: 10px; opacity: .7; }
+.admin-support-message.user { align-self: flex-start; background: var(--bc-surface-3); border: 1px solid var(--bc-line); border-bottom-left-radius: 3px; }
+.admin-support-message.admin { align-self: flex-end; background: linear-gradient(180deg, #FFD24A, var(--bc-gold)); color: #0A0A0C; border-bottom-right-radius: 3px; }
+.admin-support-thread form { display: flex; align-items: flex-end; gap: 9px; padding: 12px 14px; border-top: 1px solid var(--bc-line-soft); }
+.admin-support-thread form textarea { flex: 1; min-width: 0; min-height: 46px; max-height: 120px; padding: 12px 14px; }
+.admin-support-thread form button { flex: 0 0 auto; width: auto; min-height: 46px; padding: 0 20px; }
+.admin-support-loading { padding: 20px; text-align: center; font-size: 12px; color: var(--bc-muted-2); }
+
+.admin-support-photo-viewer {
+  position: fixed;
+  top: 0; right: 0; bottom: 0; left: 0;
+  z-index: 1200;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(3, 3, 4, .82);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+}
+.admin-support-photo-card { position: relative; max-width: min(92vw, 720px); border: 1px solid var(--bc-line); border-radius: var(--bc-r); background: var(--bc-surface); padding: 12px; }
+.admin-support-photo-card img { display: block; max-width: 100%; max-height: 76dvh; border-radius: 10px; }
+
+/* ---------- 20c. REMAINING ADMIN CONTAINERS ---------- */
+.admin-overview { display: grid; gap: 16px; }
+.admin-notification-list { display: grid; gap: 9px; margin-top: 12px; }
+.admin-notification-list > * { border: 1px solid var(--bc-line); border-radius: 12px; background: var(--bc-surface-2); padding: 12px; font-size: 12.5px; }
+.admin-crypto-wallets, .admin-crypto-requests { display: grid; gap: 11px; margin-top: 12px; }
+.admin-crypto-request { display: grid; gap: 7px; border: 1px solid var(--bc-line); border-radius: 12px; background: var(--bc-surface-2); padding: 12px; font-size: 12px; }
+.admin-qr-manager, .admin-plan-manager { display: grid; gap: 14px; }
+.admin-qr-add, .admin-plan-order, .admin-vip-controls, .admin-bulk-confirm { display: flex; flex-wrap: wrap; align-items: center; gap: 9px; }
+.admin-bulk-confirm { padding: 11px 13px; border: 1px solid rgba(255, 176, 32, .34); border-radius: 12px; background: rgba(255, 176, 32, .08); font-size: 12px; }
+.admin-qr-upload { display: grid; gap: 8px; }
+.admin-receipt-customer-picker { display: grid; gap: 9px; }
+.admin-home-banner-copy { display: grid; gap: 5px; }
+.admin-plan-photo-remove { justify-self: start; }
+.admin-request-filters { display: grid; gap: 12px; }
+
+@media (max-width: 900px) {
+  .admin-support-inbox { grid-template-columns: minmax(0, 1fr); }
+  .admin-support-list { border-right: 0; border-bottom: 1px solid var(--bc-line); border-radius: var(--bc-r) var(--bc-r) 0 0; }
+  .admin-support-thread { border-radius: 0 0 var(--bc-r) var(--bc-r); }
+  .admin-support-list > div { max-height: 34dvh; }
+}
 
 /* ---------- 21. MISC ---------- */
 .public-demo-banner {
