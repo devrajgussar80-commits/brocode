@@ -5,8 +5,8 @@
 # dashboard reachable exclusively through this service.
 FROM node:22-alpine AS web
 WORKDIR /app
-COPY package.json package-lock.json* pnpm-lock.yaml* ./
-RUN corepack enable && (pnpm install --frozen-lockfile || npm install)
+COPY package.json package-lock.json* ./
+RUN npm install --no-audit --no-fund
 COPY admin.html vite.admin.config.js ./
 COPY src ./src
 COPY public ./public
