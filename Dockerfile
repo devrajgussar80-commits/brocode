@@ -29,4 +29,7 @@ COPY --from=web /app/dist-admin ./dist-admin
 ENV NIVESH_DB_PATH=/tmp/brocode.db
 ENV PORT=8000
 EXPOSE 8000
-CMD ["sh", "-c", "uvicorn backend.app:app --host 0.0.0.0 --port ${PORT}"]
+# --app-dir puts /app/backend on sys.path so app.py's sibling imports (db, schema)
+# resolve. Loading it as `backend.app` instead would make `import db` look for
+# /app/db.py and fail. This matches how the app is run in development.
+CMD ["sh", "-c", "uvicorn app:app --app-dir backend --host 0.0.0.0 --port ${PORT}"]
