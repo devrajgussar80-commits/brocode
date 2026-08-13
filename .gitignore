@@ -13,4 +13,12 @@ backend/admin_token
 .env.*
 !.env.example
 
+# Credential drops — never commit connection strings
+neondb.txt
+*neon*.txt
+*credentials*.txt
+*.pgpass
+DATABASE_URL*
+
 .vercel
+dist-admin/

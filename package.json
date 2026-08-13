@@ -1,1 +1,31 @@
-{"scripts":{"dev":"concurrently -k -n api,web \"node server.js\" \"vite --host 127.0.0.1\"","dev:web":"vite --host 127.0.0.1","dev:api":"node server.js","build":"vite build"},"dependencies":{"@vitejs/plugin-react":"latest","concurrently":"^10.0.3","dotenv":"^17.4.2","express":"^5.2.1","lucide-react":"latest","qrcode":"^1.5.4","razorpay":"^2.9.6","react":"latest","react-dom":"latest","vite":"latest"}}
+{
+  "name": "brocode",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently -k -n api,web \"node server.js\" \"vite --host 127.0.0.1\"",
+    "dev:web": "vite --host 127.0.0.1",
+    "dev:admin": "vite --config vite.admin.config.js --host 127.0.0.1",
+    "dev:api": "node server.js",
+    "build": "vite build",
+    "build:admin": "vite build --config vite.admin.config.js",
+    "build:all": "vite build && vite build --config vite.admin.config.js",
+    "lint": "eslint src --no-warn-ignored"
+  },
+  "devDependencies": {
+    "eslint": "^9.39.0",
+    "globals": "^16.0.0"
+  },
+  "dependencies": {
+    "@vitejs/plugin-react": "latest",
+    "concurrently": "^10.0.3",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "lucide-react": "latest",
+    "qrcode": "^1.5.4",
+    "razorpay": "^2.9.6",
+    "react": "latest",
+    "react-dom": "latest",
+    "vite": "latest"
+  }
+}

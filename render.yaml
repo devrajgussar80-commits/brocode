@@ -1,14 +1,44 @@
 services:
   - type: web
-    name: nivesh-mini-app
+    name: brocode-api
     runtime: docker
     plan: free
+    # Neon is in us-east-2; keeping the backend in the same region matters a lot
+    # here because the admin dashboard makes many sequential queries.
+    region: ohio
+    healthCheckPath: /api/health
     envVars:
+      # Neon connection string. Use the -pooler host for the app.
+      # Set this in the Render dashboard - never commit it.
+      - key: DATABASE_URL
+        sync: false
+
+      # Admin dashboard password. Render generates a strong value; without it the
+      # code falls back to a default that is public in this repository.
       - key: NIVESH_ADMIN_TOKEN
         generateValue: true
+
+      # Comma-separated origins allowed to call the API. Set to your Vercel
+      # domain, e.g. https://brocode.vercel.app
+      # Only needed if the customer app calls this API directly. If Vercel
+      # proxies /api via the rewrite in vercel.json, requests are same-origin
+      # and this can stay empty.
       - key: ALLOWED_ORIGINS
         sync: false
+
+      # Razorpay credentials
+      - key: RAZORPAY_KEY_ID
+        sync: false
+      - key: RAZORPAY_KEY_SECRET
+        sync: false
+      - key: RAZORPAY_WEBHOOK_SECRET
+        sync: false
+
+      # Directory anchor for uploaded files (receipts, plan images, bank key).
       - key: NIVESH_DB_PATH
-        value: /tmp/nivesh.db
-      - key: PUBLIC_DEMO
-        value: "true"
+        value: /data/brocode.db
+
+    disk:
+      name: brocode-uploads
+      mountPath: /data
+      sizeGB: 1

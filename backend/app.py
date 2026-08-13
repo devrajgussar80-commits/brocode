@@ -1,6 +1,10 @@
-import base64, binascii, hashlib, hmac, json, os, re, secrets, sqlite3
+import base64, binascii, hashlib, hmac, json, os, re, secrets
 from urllib.request import Request, urlopen
 from contextlib import contextmanager
+
+import db as database
+from db import IntegrityError, add_column, db
+from schema import INDEXES, SCHEMA
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -8,7 +12,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from pydantic import BaseModel, Field
 from cryptography.fernet import Fernet, InvalidToken
 
@@ -131,121 +135,19 @@ def withdrawal_breakdown(amount):
     fee_amount = (amount * WITHDRAWAL_FEE_PERCENT + 50) // 100
     return fee_amount, amount - fee_amount
 
-@contextmanager
-def db():
-    con = sqlite3.connect(DB_PATH, timeout=30); con.row_factory = sqlite3.Row
-    con.execute("PRAGMA foreign_keys=ON")
-    con.execute("PRAGMA busy_timeout=30000")
-    con.execute("PRAGMA synchronous=NORMAL")
-    con.execute("PRAGMA temp_store=MEMORY")
-    con.execute("PRAGMA cache_size=-8000")
-    try: yield con; con.commit()
-    except Exception: con.rollback(); raise
-    finally: con.close()
-
-def add_column(con, table, definition):
-    name = definition.split()[0]
-    if name not in {r[1] for r in con.execute(f"PRAGMA table_info({table})")}: con.execute(f"ALTER TABLE {table} ADD COLUMN {definition}")
-
 def init_db():
-    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    """Create the schema, then run the data seeds and backfills.
+
+    The SQLite version grew its schema incrementally with ~50 add_column calls and
+    two table-rebuild migrations. Postgres gets the finished shape in one pass from
+    schema.py, so only the seeding and backfill work below is still needed.
+    """
     with db() as con:
-        con.execute("PRAGMA journal_mode=WAL")
-        con.executescript("""
-        CREATE TABLE IF NOT EXISTS users(id TEXT PRIMARY KEY,name TEXT NOT NULL,balance INTEGER NOT NULL DEFAULT 0 CHECK(balance>=0),created_at TEXT NOT NULL);
-        CREATE TABLE IF NOT EXISTS sessions(token TEXT PRIMARY KEY,user_id TEXT NOT NULL REFERENCES users(id),expires_at TEXT NOT NULL);
-        CREATE TABLE IF NOT EXISTS bank_accounts(user_id TEXT PRIMARY KEY REFERENCES users(id),beneficiary TEXT NOT NULL,ifsc TEXT NOT NULL,account_last4 TEXT NOT NULL,account_hash TEXT NOT NULL,updated_at TEXT NOT NULL);
-        CREATE TABLE IF NOT EXISTS recharges(id INTEGER PRIMARY KEY AUTOINCREMENT,user_id TEXT NOT NULL REFERENCES users(id),amount INTEGER NOT NULL CHECK(amount>0),utr TEXT NOT NULL UNIQUE,upi_id TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'pending',created_at TEXT NOT NULL,reviewed_at TEXT);
-        CREATE TABLE IF NOT EXISTS recharge_drafts(id INTEGER PRIMARY KEY AUTOINCREMENT,user_id TEXT NOT NULL REFERENCES users(id),amount INTEGER NOT NULL CHECK(amount>0),upi_id TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'awaiting_utr',created_at TEXT NOT NULL,submitted_at TEXT,recharge_id INTEGER REFERENCES recharges(id));
-        CREATE TABLE IF NOT EXISTS withdrawals(id INTEGER PRIMARY KEY AUTOINCREMENT,user_id TEXT NOT NULL REFERENCES users(id),amount INTEGER NOT NULL CHECK(amount>=200),status TEXT NOT NULL DEFAULT 'requested',created_at TEXT NOT NULL);
-        CREATE TABLE IF NOT EXISTS active_plans(id INTEGER PRIMARY KEY AUTOINCREMENT,user_id TEXT NOT NULL REFERENCES users(id),plan_id TEXT NOT NULL,invested INTEGER NOT NULL,total_return INTEGER NOT NULL,daily_earning INTEGER NOT NULL,duration_days INTEGER NOT NULL,status TEXT NOT NULL DEFAULT 'active',purchased_at TEXT NOT NULL);
-        CREATE TABLE IF NOT EXISTS transactions(id INTEGER PRIMARY KEY AUTOINCREMENT,user_id TEXT NOT NULL REFERENCES users(id),kind TEXT NOT NULL,amount INTEGER NOT NULL,reference TEXT,created_at TEXT NOT NULL);
-        CREATE TABLE IF NOT EXISTS referral_rewards(id INTEGER PRIMARY KEY AUTOINCREMENT,inviter_id TEXT NOT NULL REFERENCES users(id),referred_user_id TEXT NOT NULL UNIQUE REFERENCES users(id),amount INTEGER NOT NULL CHECK(amount>0),created_at TEXT NOT NULL);
-        CREATE TABLE IF NOT EXISTS payment_qrs(id INTEGER PRIMARY KEY AUTOINCREMENT,upi_id TEXT NOT NULL,payee TEXT NOT NULL,created_at TEXT NOT NULL,updated_at TEXT NOT NULL);
-        CREATE TABLE IF NOT EXISTS crypto_wallets(coin TEXT PRIMARY KEY,network TEXT NOT NULL,address TEXT NOT NULL DEFAULT '',updated_at TEXT NOT NULL);
-        CREATE TABLE IF NOT EXISTS crypto_recharges(id INTEGER PRIMARY KEY AUTOINCREMENT,user_id TEXT NOT NULL REFERENCES users(id),coin TEXT NOT NULL,network TEXT NOT NULL,address TEXT NOT NULL,txid TEXT NOT NULL UNIQUE,amount_inr INTEGER NOT NULL CHECK(amount_inr>=2),status TEXT NOT NULL DEFAULT 'pending',created_at TEXT NOT NULL,reviewed_at TEXT);
-        CREATE TABLE IF NOT EXISTS app_settings(key TEXT PRIMARY KEY,value TEXT NOT NULL,updated_at TEXT NOT NULL);
-        CREATE TABLE IF NOT EXISTS plan_catalog(id TEXT PRIMARY KEY,name TEXT,days INTEGER NOT NULL,amount INTEGER,total_return INTEGER,daily_earning INTEGER,payout_mode TEXT NOT NULL DEFAULT 'maturity',purchase_limit INTEGER NOT NULL DEFAULT 1,coming_soon INTEGER NOT NULL DEFAULT 0,is_active INTEGER NOT NULL DEFAULT 1,sort_order INTEGER NOT NULL DEFAULT 0,image_name TEXT,image_mime TEXT,updated_at TEXT NOT NULL);
-        CREATE TABLE IF NOT EXISTS notifications(id INTEGER PRIMARY KEY AUTOINCREMENT,title TEXT NOT NULL,message TEXT NOT NULL,created_at TEXT NOT NULL);
-        CREATE TABLE IF NOT EXISTS notification_reads(notification_id INTEGER NOT NULL REFERENCES notifications(id),user_id TEXT NOT NULL REFERENCES users(id),read_at TEXT NOT NULL,PRIMARY KEY(notification_id,user_id));
-        CREATE TABLE IF NOT EXISTS visitor_profiles(id INTEGER PRIMARY KEY AUTOINCREMENT,visitor_id TEXT NOT NULL UNIQUE,visitor_code TEXT UNIQUE,first_seen_at TEXT NOT NULL,last_seen_at TEXT NOT NULL,visit_count INTEGER NOT NULL DEFAULT 0,first_referrer TEXT NOT NULL DEFAULT '',last_path TEXT NOT NULL DEFAULT '/',last_action TEXT NOT NULL DEFAULT 'popup_seen',registered_user_id TEXT REFERENCES users(id));
-        CREATE TABLE IF NOT EXISTS visitor_events(id INTEGER PRIMARY KEY AUTOINCREMENT,visitor_id TEXT NOT NULL,session_id TEXT NOT NULL,path TEXT NOT NULL DEFAULT '/',referrer TEXT NOT NULL DEFAULT '',created_at TEXT NOT NULL);
-        CREATE TABLE IF NOT EXISTS support_conversations(user_id TEXT PRIMARY KEY REFERENCES users(id),status TEXT NOT NULL DEFAULT 'open',created_at TEXT NOT NULL,updated_at TEXT NOT NULL,admin_read_at TEXT,user_read_at TEXT);
-        CREATE TABLE IF NOT EXISTS support_messages(id INTEGER PRIMARY KEY AUTOINCREMENT,user_id TEXT NOT NULL REFERENCES users(id),sender TEXT NOT NULL CHECK(sender IN ('user','admin')),message TEXT NOT NULL,created_at TEXT NOT NULL,read_at TEXT);
-        """)
-        crypto_table_sql = con.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='crypto_recharges'").fetchone()[0]
-        if "check(amount_inr>=100)" in crypto_table_sql.lower().replace(" ", ""):
-            con.executescript("""
-            ALTER TABLE crypto_recharges RENAME TO crypto_recharges_legacy;
-            CREATE TABLE crypto_recharges(id INTEGER PRIMARY KEY AUTOINCREMENT,user_id TEXT NOT NULL REFERENCES users(id),coin TEXT NOT NULL,network TEXT NOT NULL,address TEXT NOT NULL,txid TEXT NOT NULL UNIQUE,amount_inr INTEGER NOT NULL CHECK(amount_inr>=2),status TEXT NOT NULL DEFAULT 'pending',created_at TEXT NOT NULL,reviewed_at TEXT);
-            INSERT INTO crypto_recharges SELECT * FROM crypto_recharges_legacy;
-            DROP TABLE crypto_recharges_legacy;
-            """)
-        add_column(con, "users", "email TEXT")
-        add_column(con, "users", "password_hash TEXT")
-        add_column(con, "users", "telegram_id TEXT")
-        add_column(con, "users", "last_seen_at TEXT")
-        add_column(con, "users", "public_id TEXT")
-        add_column(con, "users", "referred_by_user_id TEXT REFERENCES users(id)")
-        add_column(con, "users", "is_disabled INTEGER NOT NULL DEFAULT 0")
-        add_column(con, "users", "disabled_at TEXT")
-        add_column(con, "users", "archived_at TEXT")
-        add_column(con, "users", "vip_approved_at TEXT")
-        add_column(con, "users", "remember_login INTEGER NOT NULL DEFAULT 1")
-        add_column(con, "users", "manual_qr_slot INTEGER")
-        add_column(con, "users", "withdrawal_enabled INTEGER NOT NULL DEFAULT 0")
-        add_column(con, "recharges", "payment_qr_id INTEGER REFERENCES payment_qrs(id)")
-        add_column(con, "recharge_drafts", "payment_qr_id INTEGER REFERENCES payment_qrs(id)")
-        add_column(con, "withdrawals", "reviewed_at TEXT")
-        add_column(con, "withdrawals", "payout_method TEXT NOT NULL DEFAULT 'bank'")
-        add_column(con, "withdrawals", "upi_id TEXT")
-        withdrawal_table_sql = con.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='withdrawals'").fetchone()[0]
-        if "check(amount>=200)" in withdrawal_table_sql.lower().replace(" ", ""):
-            con.executescript("""
-            ALTER TABLE withdrawals RENAME TO withdrawals_legacy;
-            CREATE TABLE withdrawals(id INTEGER PRIMARY KEY AUTOINCREMENT,user_id TEXT NOT NULL REFERENCES users(id),amount INTEGER NOT NULL CHECK(amount>=120),status TEXT NOT NULL DEFAULT 'requested',created_at TEXT NOT NULL,reviewed_at TEXT,payout_method TEXT NOT NULL DEFAULT 'bank',upi_id TEXT);
-            INSERT INTO withdrawals(id,user_id,amount,status,created_at,reviewed_at,payout_method,upi_id) SELECT id,user_id,amount,status,created_at,reviewed_at,payout_method,upi_id FROM withdrawals_legacy;
-            DROP TABLE withdrawals_legacy;
-            """)
-        con.execute("""CREATE TABLE IF NOT EXISTS withdrawal_receipts(
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            withdrawal_id INTEGER NOT NULL UNIQUE REFERENCES withdrawals(id),
-            user_id TEXT NOT NULL REFERENCES users(id),
-            image_name TEXT NOT NULL UNIQUE,
-            mime_type TEXT NOT NULL,
-            caption TEXT NOT NULL DEFAULT '',
-            created_at TEXT NOT NULL
-        )""")
-        add_column(con, "withdrawal_receipts", "application_image_name TEXT")
-        add_column(con, "withdrawal_receipts", "application_mime_type TEXT")
-        add_column(con, "bank_accounts", "account_encrypted TEXT")
-        add_column(con, "crypto_recharges", "gross_inr INTEGER")
-        add_column(con, "crypto_recharges", "fee_inr INTEGER")
-        add_column(con, "crypto_recharges", "credited_inr INTEGER")
-        add_column(con, "active_plans", "payout_mode TEXT NOT NULL DEFAULT 'maturity'")
-        add_column(con, "active_plans", "credited_days INTEGER NOT NULL DEFAULT 0")
-        add_column(con, "active_plans", "duration_unit TEXT NOT NULL DEFAULT 'days'")
-        add_column(con, "withdrawals", "request_key TEXT")
-        add_column(con, "withdrawals", "fee_amount INTEGER NOT NULL DEFAULT 0")
-        add_column(con, "withdrawals", "payout_amount INTEGER NOT NULL DEFAULT 0")
-        add_column(con, "withdrawals", "receipt_at TEXT")
-        add_column(con, "withdrawals", "receipt_sort_order INTEGER NOT NULL DEFAULT 0")
-        add_column(con, "withdrawals", "receipt_amount INTEGER")
-        add_column(con, "withdrawals", "receipt_reference TEXT")
-        add_column(con, "withdrawals", "receipt_hidden_at TEXT")
+        for statement in database.split_statements(SCHEMA):
+            con.execute(statement)
+        for statement in database.split_statements(INDEXES):
+            con.execute(statement)
         con.execute("UPDATE withdrawals SET receipt_sort_order=id WHERE receipt_sort_order=0")
-        add_column(con, "recharges", "archived_at TEXT")
-        add_column(con, "withdrawals", "archived_at TEXT")
-        add_column(con, "plan_catalog", "name TEXT")
-        add_column(con, "plan_catalog", "image_name TEXT")
-        add_column(con, "plan_catalog", "image_mime TEXT")
-        add_column(con, "plan_catalog", "image_auto_fit INTEGER NOT NULL DEFAULT 0")
-        add_column(con, "plan_catalog", "image_updated_at TEXT")
-        add_column(con, "plan_catalog", "category TEXT NOT NULL DEFAULT 'plan'")
-        add_column(con, "plan_catalog", "vip_locked INTEGER NOT NULL DEFAULT 0")
-        add_column(con, "plan_catalog", "vip_activation INTEGER NOT NULL DEFAULT 0")
-        add_column(con, "plan_catalog", "plan_locked INTEGER NOT NULL DEFAULT 0")
-        add_column(con, "plan_catalog", "duration_unit TEXT NOT NULL DEFAULT 'days'")
         con.execute("UPDATE plan_catalog SET is_active=0,updated_at=? WHERE category='welfare' AND is_active=1", (now_iso(),))
         con.execute("UPDATE plan_catalog SET category='plan',vip_locked=0,vip_activation=0 WHERE category NOT IN ('plan','benefit','vip') OR category IS NULL")
         con.execute("UPDATE plan_catalog SET vip_locked=0,vip_activation=0 WHERE category!='vip'")
@@ -253,13 +155,6 @@ def init_db():
         con.execute("UPDATE plan_catalog SET duration_unit='days' WHERE duration_unit NOT IN ('hours','days') OR duration_unit IS NULL")
         con.execute("UPDATE plan_catalog SET image_updated_at=updated_at WHERE image_name IS NOT NULL AND image_updated_at IS NULL")
         con.execute("UPDATE active_plans SET duration_unit='days' WHERE duration_unit NOT IN ('hours','days') OR duration_unit IS NULL")
-        add_column(con, "payment_qrs", "admin_label TEXT NOT NULL DEFAULT ''")
-        add_column(con, "payment_qrs", "source TEXT NOT NULL DEFAULT 'manual'")
-        add_column(con, "payment_qrs", "image_blob BLOB")
-        add_column(con, "payment_qrs", "image_mime TEXT")
-        add_column(con, "support_messages", "image_data TEXT")
-        add_column(con, "support_messages", "image_mime TEXT")
-        add_column(con, "support_messages", "image_name TEXT")
         con.execute("UPDATE payment_qrs SET admin_label=payee WHERE trim(admin_label)='' ")
         uploaded_qr_ids = [row["id"] for row in con.execute("SELECT id FROM payment_qrs WHERE source='uploaded' AND image_blob IS NOT NULL ORDER BY id LIMIT 2")]
         for qr_id, label in zip(uploaded_qr_ids, ("Devraj QR", "Jayesh QR")):
@@ -552,8 +447,19 @@ app.add_middleware(CORSMiddleware, allow_origins=os.getenv("ALLOWED_ORIGINS", "h
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 init_db()
 
+@app.on_event("shutdown")
+def close_pool():
+    """Release Neon connections before the interpreter tears down, otherwise the
+    pool's finalizer tries to join its worker threads during shutdown."""
+    if database._pool is not None:
+        database._pool.close()
+        database._pool = None
+
 @app.get("/api/health")
-def health(): return {"ok": True, "version": "2.0.0"}
+def health():
+    with db() as con:
+        con.execute("SELECT 1")
+    return {"ok": True, "version": "2.0.0", "database": "postgres"}
 
 def ensure_visitor_profile(con, visitor_id: str, path: str = "/", referrer: str = "", seen_at: str | None = None):
     profile = con.execute("SELECT * FROM visitor_profiles WHERE visitor_id=?", (visitor_id,)).fetchone()
@@ -605,8 +511,8 @@ def public_config(response: Response):
             "message": settings.get("welcome_popup_message", "Create your account and manage your wallet from one place."),
             "buttonText": settings.get("welcome_popup_button", "Continue"),
         }
-        home_banner_url = f"/api/home-banner?v={settings.get('home_banner_updated_at', '')}" if settings.get("home_banner_name") else "/assets/nivesh-plan-banner.webp"
-        return {"company_name": settings.get("company_name", "BroCode"), "telegram_url": settings.get("telegram_url", DEFAULT_TELEGRAM_URL), "minimum_recharge":int(settings.get("minimum_recharge", "100")), "first_recharge_amount":int(settings.get("first_recharge_amount", "100")), "home_banner_url":home_banner_url, "welcome_popup":welcome_popup, "plans": [{"id":row["id"],"name":row["name"],"category":row["category"],"days":row["days"],"durationUnit":row["duration_unit"],"amount":row["amount"],"totalReturn":row["total_return"],"dailyEarning":row["daily_earning"],"payoutMode":row["payout_mode"],"limit":row["purchase_limit"],"comingSoon":bool(row["coming_soon"]),"planLocked":bool(row["plan_locked"]),"vipLocked":bool(row["vip_locked"]),"vipActivation":bool(row["vip_activation"]),"imageAutoFit":bool(row["image_auto_fit"]),"imageUrl":f"/api/plan-images/{row['id']}?v={row['image_updated_at'] or row['updated_at']}" if row["image_name"] else "/assets/nivesh-plan-banner.webp"} for row in plan_rows],"payment_qrs":qr_rows,"crypto_wallets":wallets}
+        home_banner_url = f"/api/home-banner?v={settings.get('home_banner_updated_at', '')}" if settings.get("home_banner_name") else "/assets/brocode-plan-banner.webp"
+        return {"company_name": settings.get("company_name", "BroCode"), "telegram_url": settings.get("telegram_url", DEFAULT_TELEGRAM_URL), "minimum_recharge":int(settings.get("minimum_recharge", "100")), "first_recharge_amount":int(settings.get("first_recharge_amount", "100")), "home_banner_url":home_banner_url, "welcome_popup":welcome_popup, "plans": [{"id":row["id"],"name":row["name"],"category":row["category"],"days":row["days"],"durationUnit":row["duration_unit"],"amount":row["amount"],"totalReturn":row["total_return"],"dailyEarning":row["daily_earning"],"payoutMode":row["payout_mode"],"limit":row["purchase_limit"],"comingSoon":bool(row["coming_soon"]),"planLocked":bool(row["plan_locked"]),"vipLocked":bool(row["vip_locked"]),"vipActivation":bool(row["vip_activation"]),"imageAutoFit":bool(row["image_auto_fit"]),"imageUrl":f"/api/plan-images/{row['id']}?v={row['image_updated_at'] or row['updated_at']}" if row["image_name"] else "/assets/brocode-plan-banner.webp"} for row in plan_rows],"payment_qrs":qr_rows,"crypto_wallets":wallets}
 
 @app.get("/api/home-banner", include_in_schema=False)
 def home_banner():
@@ -669,7 +575,7 @@ def register(p: Credentials):
             if p.visitor_id:
                 ensure_visitor_profile(con,p.visitor_id,seen_at=registered_at)
                 con.execute("UPDATE visitor_profiles SET registered_user_id=?,last_action='registered',last_seen_at=? WHERE visitor_id=?", (uid,registered_at,p.visitor_id))
-        except sqlite3.IntegrityError: raise HTTPException(409, "An account already exists for this email")
+        except IntegrityError: raise HTTPException(409, "An account already exists for this email")
         return {"token": session_for(con,uid), "remember_login":True, "user":{"id":uid,"public_id":public_id,"name":p.name.strip(),"email":email}, "signup_bonus":SIGNUP_BONUS}
 
 @app.post("/api/auth/login")
@@ -851,7 +757,7 @@ def upload_withdrawal_receipt(p: WithdrawalReceiptInput, user=Depends(current_us
             application_path.write_bytes(application_bytes)
             success_path.write_bytes(success_bytes)
             cur = con.execute("INSERT INTO withdrawal_receipts(withdrawal_id,user_id,image_name,mime_type,caption,created_at,application_image_name,application_mime_type) VALUES(?,?,?,?,?,?,?,?)", (p.withdrawal_id,user["id"],success_image_name,success_mime,caption,now_iso(),application_image_name,application_mime))
-        except sqlite3.IntegrityError:
+        except IntegrityError:
             application_path.unlink(missing_ok=True); success_path.unlink(missing_ok=True)
             raise HTTPException(409, "A receipt has already been uploaded for this withdrawal")
         except OSError as exc:
@@ -888,7 +794,7 @@ def crypto_recharge(p: CryptoRechargeInput, user=Depends(current_user)):
         gross_inr, fee_inr, credited_inr = usdt_to_inr(p.amount_inr)
         try:
             cur = con.execute("INSERT INTO crypto_recharges(user_id,coin,network,address,txid,amount_inr,gross_inr,fee_inr,credited_inr,status,created_at) VALUES(?,?,?,?,?,?,?,?,?,'pending',?)", (user["id"],coin,wallet["network"],wallet["address"],txid,p.amount_inr,gross_inr,fee_inr,credited_inr,now_iso()))
-        except sqlite3.IntegrityError: raise HTTPException(409, "This transaction ID has already been submitted")
+        except IntegrityError: raise HTTPException(409, "This transaction ID has already been submitted")
         return {"id":cur.lastrowid,"status":"pending","reference":f"CRYPTO-{cur.lastrowid:06d}","gross_inr":gross_inr,"fee_inr":fee_inr,"credited_inr":credited_inr}
 
 @app.post("/api/bank")
@@ -929,7 +835,7 @@ def recharge(p:Recharge,user=Depends(current_user)):
             if not draft: raise HTTPException(409, "Recharge draft not found or already submitted")
             payment_qr_id = payment_qr_id or draft["payment_qr_id"]
         try: cur=con.execute("INSERT INTO recharges(user_id,amount,utr,upi_id,payment_qr_id,status,created_at) VALUES(?,?,?,?,?, 'pending',?)",(user["id"],p.amount,utr,p.upi_id,payment_qr_id,now_iso()))
-        except sqlite3.IntegrityError: raise HTTPException(409,"This UTR has already been submitted")
+        except IntegrityError: raise HTTPException(409,"This UTR has already been submitted")
         if p.draft_id is not None:
             con.execute("UPDATE recharge_drafts SET status='submitted',submitted_at=?,recharge_id=?,payment_qr_id=? WHERE id=?", (now_iso(), cur.lastrowid, payment_qr_id, p.draft_id))
         return {"id":cur.lastrowid,"status":"pending","reference":f"RCG-{cur.lastrowid:06d}"}
@@ -1185,7 +1091,7 @@ def admin_dashboard():
                    purchased.plan_id AS purchased_plan_id,
                    catalog.name AS purchased_plan_name,
                    CASE
-                       WHEN t.kind='plan_purchase' AND t.reference GLOB 'PLAN-??????-*X'
+                       WHEN t.kind='plan_purchase' AND t.reference LIKE 'PLAN-______-%X'
                        THEN CAST(replace(substr(t.reference, 13), 'X', '') AS INTEGER)
                        ELSE NULL
                    END AS purchased_plan_quantity
@@ -1193,7 +1099,11 @@ def admin_dashboard():
             JOIN users u ON u.id=t.user_id
             LEFT JOIN active_plans purchased
               ON t.kind='plan_purchase'
-             AND purchased.id=CAST(substr(t.reference, 6, 6) AS INTEGER)
+             -- Postgres evaluates this for every row and will not coerce a
+             -- non-numeric substring, so guard the cast instead of relying on
+             -- SQLite's lenient CAST-to-0 behaviour.
+             AND purchased.id=CASE WHEN t.reference ~ '^PLAN-[0-9]{6}'
+                                   THEN CAST(substr(t.reference, 6, 6) AS INTEGER) END
             LEFT JOIN plan_catalog catalog ON catalog.id=purchased.plan_id
             ORDER BY t.id DESC LIMIT 500
         """)]
@@ -1462,7 +1372,7 @@ def validate_plan_input(p: AdminPlanInput):
 def add_admin_plan(p: AdminPlanInput):
     validate_plan_input(p)
     with db() as con:
-        numeric_ids = [int(row[0][1:]) for row in con.execute("SELECT id FROM plan_catalog WHERE id GLOB 'p[0-9]*'") if row[0][1:].isdigit()]
+        numeric_ids = [int(row[0][1:]) for row in con.execute("SELECT id FROM plan_catalog WHERE id ~ '^p[0-9]'") if row[0][1:].isdigit()]
         plan_id = f"p{max(numeric_ids, default=0)+1}"
         sort_order = con.execute("SELECT COALESCE(MAX(sort_order),-1)+1 FROM plan_catalog").fetchone()[0]
         con.execute("INSERT INTO plan_catalog(id,name,category,days,duration_unit,amount,total_return,daily_earning,payout_mode,purchase_limit,coming_soon,plan_locked,vip_locked,vip_activation,is_active,sort_order,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,1,?,?)", (plan_id," ".join(p.name.split()),p.category,p.days,p.duration_unit,p.amount,p.total_return,p.daily_earning,p.payout_mode,p.purchase_limit,1 if p.coming_soon else 0,1 if p.plan_locked else 0,1 if p.vip_locked else 0,1 if p.vip_activation else 0,sort_order,now_iso()))
@@ -1918,17 +1828,58 @@ def reject_withdrawal(wid: int):
                     (withdrawal["user_id"], "withdrawal_refund", withdrawal["amount"], f"WD-{wid}", now_iso()))
         return {"status": "rejected", "refunded": withdrawal["amount"]}
 
-FRONTEND_DIST = BASE_DIR.parent / "dist"
-if FRONTEND_DIST.exists():
+class CachedStaticFiles(StaticFiles):
+    async def get_response(self, path, scope):
+        response = await super().get_response(path, scope)
+        if response.status_code == 200:
+            hashed = path.lstrip("/").startswith("assets/")
+            response.headers["Cache-Control"] = "public, max-age=31536000, immutable" if hashed else "public, max-age=60"
+        return response
+
+
+# The admin dashboard is served ONLY from here. It is built separately into
+# dist-admin/ and is never part of the customer bundle deployed to Vercel, so the
+# public host cannot serve it even by direct URL.
+ADMIN_DIST = BASE_DIR.parent / "dist-admin"
+if ADMIN_DIST.exists():
     @app.get("/admin", include_in_schema=False)
     def admin_page():
-        return FileResponse(FRONTEND_DIST / "index.html", headers={"Cache-Control":"public, max-age=60"})
+        return FileResponse(ADMIN_DIST / "admin.html", headers={"Cache-Control": "no-store", "X-Robots-Tag": "noindex"})
 
-    class CachedStaticFiles(StaticFiles):
-        async def get_response(self, path, scope):
-            response = await super().get_response(path, scope)
-            if response.status_code == 200:
-                response.headers["Cache-Control"] = "public, max-age=31536000, immutable" if path.lstrip("/").startswith("assets/") else "public, max-age=60"
-            return response
+    app.mount("/admin", CachedStaticFiles(directory=ADMIN_DIST, html=True), name="admin")
 
-    app.mount("/", CachedStaticFiles(directory=FRONTEND_DIST, html=True), name="frontend")
+# Optional: the customer bundle. Present for single-host deployments; on Render
+# this directory can be absent because Vercel serves the customer app.
+FRONTEND_DIST = BASE_DIR.parent / "dist"
+# Landing URL the bare domain redirects to. Kept in one place so it can be
+# changed without touching routing logic. A 302 (not 301) on purpose: browsers
+# cache permanent redirects aggressively and it would be painful to undo.
+DEFAULT_LANDING_PATH = os.getenv("DEFAULT_LANDING_PATH", "/welcome?user=brocode&id=1985634")
+
+if FRONTEND_DIST.exists():
+    _FRONTEND_ROOT = FRONTEND_DIST.resolve()
+
+    # HEAD is included because uptime monitors and platform health probes use it;
+    # a GET-only route answers those with 405.
+    @app.api_route("/{full_path:path}", methods=["GET", "HEAD"], include_in_schema=False)
+    def customer_spa(full_path: str):
+        """Serve the customer app for any path depth.
+
+        The app is a single page with no server-side routes, so a deep link such
+        as /welcome?user=brocode&id=1985634 must still return index.html rather
+        than 404. This mirrors the catch-all rewrite Vercel applies, so local and
+        deployed behaviour match. Real files (hashed assets, /brand images) are
+        served directly; everything else falls back to the shell.
+        """
+        if full_path.startswith("api/"):
+            raise HTTPException(404, "Not Found")
+        if not full_path and DEFAULT_LANDING_PATH:
+            return RedirectResponse(DEFAULT_LANDING_PATH, status_code=302)
+        if full_path:
+            candidate = (FRONTEND_DIST / full_path).resolve()
+            # Reject traversal outside the build directory before touching disk.
+            if candidate.is_file() and (candidate == _FRONTEND_ROOT or _FRONTEND_ROOT in candidate.parents):
+                immutable = full_path.startswith("assets/")
+                cache = "public, max-age=31536000, immutable" if immutable else "public, max-age=60"
+                return FileResponse(candidate, headers={"Cache-Control": cache})
+        return FileResponse(FRONTEND_DIST / "index.html", headers={"Cache-Control": "public, max-age=60"})
