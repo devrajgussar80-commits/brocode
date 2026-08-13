@@ -18,9 +18,15 @@ COPY backend/requirements.txt ./backend/requirements.txt
 RUN pip install --no-cache-dir -r backend/requirements.txt
 COPY backend ./backend
 COPY --from=web /app/dist-admin ./dist-admin
-# Uploaded receipts, plan images and the bank-data key live here. Postgres holds
-# the records themselves, so this only needs to survive for file uploads.
-ENV NIVESH_DB_PATH=/data/brocode.db
+# Anchor for file uploads (receipts, plan images). Postgres holds all records, so
+# nothing here is authoritative. /tmp is correct for instances without a disk;
+# point it at a mounted volume if you attach one.
+#
+# IMPORTANT on plans without a persistent disk: set NIVESH_BANK_DATA_KEY in the
+# environment. Otherwise the bank-data Fernet key is written to this directory and
+# regenerated whenever the instance restarts, which makes every previously stored
+# bank account permanently undecryptable.
+ENV NIVESH_DB_PATH=/tmp/brocode.db
 ENV PORT=8000
 EXPOSE 8000
 CMD ["sh", "-c", "uvicorn backend.app:app --host 0.0.0.0 --port ${PORT}"]

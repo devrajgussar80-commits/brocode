@@ -34,11 +34,19 @@ services:
       - key: RAZORPAY_WEBHOOK_SECRET
         sync: false
 
-      # Directory anchor for uploaded files (receipts, plan images, bank key).
-      - key: NIVESH_DB_PATH
-        value: /data/brocode.db
+      # Required on plans without a persistent disk (including Free): pins the
+      # bank-data encryption key so it survives restarts. Without it the key is
+      # regenerated on every restart and stored bank accounts cannot be decrypted.
+      # Generate with:
+      #   python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+      - key: NIVESH_BANK_DATA_KEY
+        sync: false
 
-    disk:
-      name: brocode-uploads
-      mountPath: /data
-      sizeGB: 1
+      # Directory anchor for uploaded files (receipts, plan images).
+      - key: NIVESH_DB_PATH
+        value: /tmp/brocode.db
+
+    # No disk: Free instances do not support persistent disks. Uploaded receipt
+    # and plan images are therefore lost on restart. All records live in Postgres,
+    # so only the image files are affected. Attach a disk on a paid plan and point
+    # NIVESH_DB_PATH at its mount path to keep them.
