@@ -556,9 +556,14 @@ def public_config(response: Response):
         # without a persistent disk, so the setting can outlive the file and leave
         # the customer app rendering a broken image.
         banner_name = settings.get("home_banner_name")
-        banner_on_disk = bool(banner_name) and (HOME_BANNER_DIR / Path(banner_name).name).exists()
+        # The image lives in Postgres; the filesystem is only a fallback for
+        # uploads made before blob storage existed.
+        banner_on_disk = bool(banner_name) and (
+            image_blob_exists(con, Path(banner_name).name)
+            or (HOME_BANNER_DIR / Path(banner_name).name).exists()
+        )
         home_banner_url = f"/api/home-banner?v={settings.get('home_banner_updated_at', '')}" if banner_on_disk else "/assets/brocode-plan-banner.webp"
-        return {"company_name": settings.get("company_name", "BroCode"), "telegram_url": settings.get("telegram_url", DEFAULT_TELEGRAM_URL), "minimum_recharge":int(settings.get("minimum_recharge", "100")), "first_recharge_amount":int(settings.get("first_recharge_amount", "100")), "home_banner_url":home_banner_url, "welcome_popup":welcome_popup, "plans": [{"id":row["id"],"name":row["name"],"category":row["category"],"days":row["days"],"durationUnit":row["duration_unit"],"amount":row["amount"],"totalReturn":row["total_return"],"dailyEarning":row["daily_earning"],"payoutMode":row["payout_mode"],"limit":row["purchase_limit"],"comingSoon":bool(row["coming_soon"]),"planLocked":bool(row["plan_locked"]),"vipLocked":bool(row["vip_locked"]),"vipActivation":bool(row["vip_activation"]),"imageAutoFit":bool(row["image_auto_fit"]),"imageUrl":f"/api/plan-images/{row['id']}?v={row['image_updated_at'] or row['updated_at']}" if row["image_name"] and (PLAN_IMAGE_DIR / Path(row["image_name"]).name).exists() else "/assets/brocode-plan-banner.webp"} for row in plan_rows],"payment_qrs":qr_rows,"crypto_wallets":wallets}
+        return {"company_name": settings.get("company_name", "BroCode"), "telegram_url": settings.get("telegram_url", DEFAULT_TELEGRAM_URL), "minimum_recharge":int(settings.get("minimum_recharge", "100")), "first_recharge_amount":int(settings.get("first_recharge_amount", "100")), "home_banner_url":home_banner_url, "welcome_popup":welcome_popup, "plans": [{"id":row["id"],"name":row["name"],"category":row["category"],"days":row["days"],"durationUnit":row["duration_unit"],"amount":row["amount"],"totalReturn":row["total_return"],"dailyEarning":row["daily_earning"],"payoutMode":row["payout_mode"],"limit":row["purchase_limit"],"comingSoon":bool(row["coming_soon"]),"planLocked":bool(row["plan_locked"]),"vipLocked":bool(row["vip_locked"]),"vipActivation":bool(row["vip_activation"]),"imageAutoFit":bool(row["image_auto_fit"]),"imageUrl":f"/api/plan-images/{row['id']}?v={row['image_updated_at'] or row['updated_at']}" if row["image_name"] else "/assets/brocode-plan-banner.webp"} for row in plan_rows],"payment_qrs":qr_rows,"crypto_wallets":wallets}
 
 @app.get("/api/home-banner", include_in_schema=False)
 def home_banner():
