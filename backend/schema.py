@@ -249,6 +249,16 @@ CREATE TABLE IF NOT EXISTS support_conversations(
   user_read_at TEXT
 );
 
+-- Uploaded images (home banner, plan artwork). Stored in the database because the
+-- application filesystem is ephemeral on hosts without a persistent disk, which
+-- made uploads vanish on restart while the settings row survived.
+CREATE TABLE IF NOT EXISTS image_blobs(
+  name TEXT PRIMARY KEY,
+  mime TEXT NOT NULL,
+  data BYTEA NOT NULL,
+  created_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS support_messages(
   id SERIAL PRIMARY KEY,
   user_id TEXT NOT NULL REFERENCES users(id),

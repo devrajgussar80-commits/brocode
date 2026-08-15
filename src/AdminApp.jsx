@@ -14,6 +14,9 @@ import {
   DEFAULT_TELEGRAM_URL, Plan, apiErrorMessage, cryptoAssetLabel, durationLabel, generateAdminPasswordSuggestion,
   money, normalizePlanImageToDataUrl, receiptFileToDataUrl, withdrawalDateTime,
 } from "./shared.jsx";
+// Original project stylesheet, copied in verbatim so the admin renders exactly
+// as it did before the redesign. Loaded after the customer styles.css.
+import "./admin-legacy.css";
 // Loaded after shared.jsx (and therefore after styles.css) so the admin theme
 // overrides the customer app's black/gold palette. Everything in it is scoped
 // under .admin-shell, so the two themes cannot bleed into each other.

@@ -12,7 +12,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.responses import FileResponse, RedirectResponse, Response
 from pydantic import BaseModel, Field
 from cryptography.fernet import Fernet, InvalidToken
 
@@ -153,6 +153,26 @@ def usdt_to_inr(amount_usdt):
 def withdrawal_breakdown(amount):
     fee_amount = (amount * WITHDRAWAL_FEE_PERCENT + 50) // 100
     return fee_amount, amount - fee_amount
+
+def store_image_blob(con, name, mime, data):
+    """Persist an uploaded image in Postgres so it survives restarts."""
+    con.execute("INSERT INTO image_blobs(name,mime,data,created_at) VALUES(?,?,?,?) "
+                "ON CONFLICT(name) DO UPDATE SET mime=excluded.mime,data=excluded.data",
+                (name, mime, data, now_iso()))
+
+
+def read_image_blob(con, name):
+    row = con.execute("SELECT mime,data FROM image_blobs WHERE name=?", (name,)).fetchone()
+    return (bytes(row["data"]), row["mime"]) if row else None
+
+
+def delete_image_blob(con, name):
+    if name: con.execute("DELETE FROM image_blobs WHERE name=?", (name,))
+
+
+def image_blob_exists(con, name):
+    return bool(name) and con.execute("SELECT 1 FROM image_blobs WHERE name=?", (name,)).fetchone() is not None
+
 
 def init_db():
     """Create the schema, then run the data seeds and backfills.
@@ -546,6 +566,10 @@ def home_banner():
         settings = {row["key"]:row["value"] for row in con.execute("SELECT key,value FROM app_settings WHERE key IN ('home_banner_name','home_banner_mime')")}
     image_name = Path(settings.get("home_banner_name", "")).name
     if not image_name: raise HTTPException(404, "Home photo not found")
+    with db() as con: blob = read_image_blob(con, image_name)
+    if blob:
+        data, mime = blob
+        return Response(content=data, media_type=mime or settings.get("home_banner_mime", "image/jpeg"), headers={"Cache-Control":"public, max-age=3600"})
     image_path = HOME_BANNER_DIR / image_name
     if not image_path.is_file(): raise HTTPException(404, "Home photo not found")
     return FileResponse(image_path, media_type=settings.get("home_banner_mime", "image/jpeg"), headers={"Cache-Control":"public, max-age=3600"})
@@ -554,6 +578,10 @@ def home_banner():
 def plan_image(plan_id: str):
     with db() as con: plan = con.execute("SELECT image_name,image_mime FROM plan_catalog WHERE id=? AND is_active=1", (plan_id,)).fetchone()
     if not plan or not plan["image_name"]: raise HTTPException(404, "Plan image not found")
+    with db() as con: blob = read_image_blob(con, Path(plan["image_name"]).name)
+    if blob:
+        data, mime = blob
+        return Response(content=data, media_type=mime or plan["image_mime"], headers={"Cache-Control":"public, max-age=3600"})
     image_path = PLAN_IMAGE_DIR / Path(plan["image_name"]).name
     if not image_path.is_file(): raise HTTPException(404, "Plan image not found")
     return FileResponse(image_path, media_type=plan["image_mime"], headers={"Cache-Control":"public, max-age=3600"})
@@ -1454,6 +1482,8 @@ def upload_admin_plan_image(plan_id: str, p: AdminPlanImageInput):
     try:
         with db() as con:
             image_updated_at = now_iso()
+            store_image_blob(con, image_name, mime_type, image_bytes)
+            if plan["image_name"]: delete_image_blob(con, Path(plan["image_name"]).name)
             con.execute("UPDATE plan_catalog SET image_name=?,image_mime=?,image_auto_fit=1,image_updated_at=?,updated_at=? WHERE id=? AND is_active=1", (image_name,mime_type,image_updated_at,image_updated_at,plan_id))
     except Exception:
         try: image_path.unlink(missing_ok=True)
@@ -1535,6 +1565,8 @@ def upload_home_banner(p: AdminPlanImageInput):
     try:
         with db() as con:
             previous = con.execute("SELECT value FROM app_settings WHERE key='home_banner_name'").fetchone()
+            store_image_blob(con, image_name, mime_type, image_bytes)
+            if previous and previous["value"]: delete_image_blob(con, Path(previous["value"]).name)
             values = {"home_banner_name":image_name, "home_banner_mime":mime_type, "home_banner_updated_at":updated_at}
             for key, value in values.items():
                 con.execute("INSERT INTO app_settings(key,value,updated_at) VALUES(?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at", (key,value,updated_at))
