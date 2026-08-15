@@ -279,8 +279,20 @@
 .admin-shell .system-healthy::before { content: none; }
 .admin-shell .system-healthy i { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
 
-/* ---------- tables ---------- */
+/* ---------- tables ----------
+   The wrapper scrolls, but a table with width:100% shrinks to fit instead of
+   overflowing, so columns crush and nothing scrolls. A min-width forces the
+   overflow that makes .admin-table-wrap scrollable. */
+.admin-shell .admin-table-wrap,
+.admin-shell .admin-user-day-table {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+}
+.admin-shell .admin-table-wrap > table,
+.admin-shell .admin-user-day-table > table { min-width: 920px; }
 .admin-shell table { font-size: 12.5px; }
+.admin-shell thead th { white-space: nowrap; }
 .admin-shell thead th {
   background: var(--ad-surface-2);
   color: var(--ad-muted-2);
