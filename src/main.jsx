@@ -316,7 +316,19 @@ function App() {
               </div>
             </header>
             <section className="home-photo-banner" aria-label="Featured home photo">
-              <img src={homeBannerUrl} alt="Featured customer home" />
+              {/* Uploaded banners live on the server filesystem, which can be
+                  wiped on hosts without a persistent disk. Fall back to the
+                  bundled asset rather than render a broken image. */}
+              <img
+                src={homeBannerUrl}
+                alt="Featured customer home"
+                onError={(event) => {
+                  if (!event.currentTarget.dataset.fallback) {
+                    event.currentTarget.dataset.fallback = "1";
+                    event.currentTarget.src = "/assets/brocode-plan-banner.webp";
+                  }
+                }}
+              />
             </section>
             <div className="actions actions-stacked">
               <button className="action-recharge" onClick={() => action("recharge")}>
