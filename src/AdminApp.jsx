@@ -17,10 +17,6 @@ import {
 // Original project stylesheet, copied in verbatim so the admin renders exactly
 // as it did before the redesign. Loaded after the customer styles.css.
 import "./admin-legacy.css";
-// Loaded after shared.jsx (and therefore after styles.css) so the admin theme
-// overrides the customer app's black/gold palette. Everything in it is scoped
-// under .admin-shell, so the two themes cannot bleed into each other.
-import "./admin.css";
 
 const ADMIN_TOKEN_KEY = "nivesh.admin.session.v1";
 const ADMIN_THEME_KEY = "nivesh.admin.theme.v1";
