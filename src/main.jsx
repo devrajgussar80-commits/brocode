@@ -41,7 +41,7 @@ function App() {
   const [customerPlans, setCustomerPlans] = useState(defaultPlans);
   const [companyName, setCompanyName] = useState(COMPANY_NAME);
   const [telegramUrl, setTelegramUrl] = useState(DEFAULT_TELEGRAM_URL);
-  const [homeBannerUrl, setHomeBannerUrl] = useState("/assets/brocode-plan-banner.webp");
+  const [homeBannerUrl, setHomeBannerUrl] = useState("");
   const [welcomePopup, setWelcomePopup] = useState({
     enabled: true,
     title: "Welcome to BroCode",
@@ -325,7 +325,7 @@ function App() {
                 onError={(event) => {
                   if (!event.currentTarget.dataset.fallback) {
                     event.currentTarget.dataset.fallback = "1";
-                    event.currentTarget.src = "/assets/brocode-plan-banner.webp";
+                    event.currentTarget.closest(".home-photo-banner")?.remove();
                   }
                 }}
               />

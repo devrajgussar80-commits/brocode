@@ -110,24 +110,10 @@ export const clearCustomerSession = () => {
   localStorage.removeItem(TOKEN_KEY);
   sessionStorage.removeItem(TOKEN_KEY);
 };
-export const PLAN_ARTWORK_BY_AMOUNT = {
-  100: "/assets/plan-starter-wealth-mobile-fast.jpg",
-  300: "/assets/plan-quick-growth-mobile-fast.jpg",
-  570: "/assets/plan-elite-vip-wealth-mobile-fast.jpg",
-  1000: "/assets/plan-smart-income-mobile-fast.jpg",
-  1250: "/assets/power-hour-wealth-plan.png",
-  5000: "/assets/plan-prime-wealth-mobile-fast.jpg",
-  7500: "/assets/plan-ultimate-wealth-mobile-fast.jpg",
-};
-export const PLAN_ARTWORK_BY_ID = {
-  p1: "/assets/plan-starter-wealth-mobile-fast.jpg",
-  p9: "/assets/plan-elite-vip-wealth-mobile-fast.jpg",
-  p2: "/assets/plan-quick-growth-mobile-fast.jpg",
-  p3: "/assets/plan-smart-income-mobile-fast.jpg",
-  p4: "/assets/plan-prime-wealth-mobile-fast.jpg",
-  p5: "/assets/plan-ultimate-wealth-mobile-fast.jpg",
-  p16: "/assets/plan-royale-wealth-mobile-fast.jpg",
-};
+// Plan artwork is stored in the database and served from /api/plan-images.
+// No artwork ships with the bundle.
+export const PLAN_ARTWORK_BY_AMOUNT = {};
+export const PLAN_ARTWORK_BY_ID = {};
 export const cryptoAssetLabel = (coin) => coin?.startsWith("USDT") ? "USDT" : coin;
 export const newRequestKey = (prefix) => {
   const unique = globalThis.crypto?.randomUUID?.() || `${Date.now()}_${Math.random().toString(36).slice(2)}`;
@@ -1351,7 +1337,7 @@ export function StablePlanArtwork({ src, alt }) {
       onError={(event) => {
         if (!event.currentTarget.dataset.fallback) {
           event.currentTarget.dataset.fallback = "true";
-          event.currentTarget.src = "/assets/brocode-plan-banner.webp";
+          event.currentTarget.closest(".plan-visual")?.classList.add("plan-visual-empty");
         } else {
           setReady(true);
         }
@@ -1377,19 +1363,19 @@ export function Plan({ p, bought, onBuy, demo, companyName, vipActive = false, v
   const planArtwork = PLAN_ARTWORK_BY_ID[p.id] || PLAN_ARTWORK_BY_AMOUNT[Number(p.amount)] || "";
   const hasUploadedArtwork = Boolean(
     p.imageUrl
-    && p.imageUrl !== "/assets/brocode-plan-banner.webp"
+    
     && (!planArtwork || p.imageAutoFit === true)
   );
-  const planImageSource = hasUploadedArtwork ? p.imageUrl : planArtwork || "/assets/brocode-plan-banner.webp";
+  const planImageSource = hasUploadedArtwork ? p.imageUrl : planArtwork || "";
   const artworkClass = hasUploadedArtwork ? " uploaded-plan-art" : planArtwork ? " supplied-plan-art" : "";
   return (
     <article className={`plan-card professional-plan-card${p.comingSoon ? " coming-soon-plan" : ""}${planLocked ? " locked-plan" : ""}`}>
       <div className={`plan-visual plan-visual-${p.id}${artworkClass}`}>
-        <StablePlanArtwork
+        {planImageSource ? <StablePlanArtwork
           key={planImageSource}
           src={planImageSource}
           alt={`${companyName} plan growth illustration`}
-        />
+        /> : null}
         <span className="plan-company">{companyName}</span>
         <span className="plan-verified"><ShieldCheck /> Plan details</span>
         <b className="plan-duration-badge">{durationLabel(p.days, p.durationUnit)}</b>
