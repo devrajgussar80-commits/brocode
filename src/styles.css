@@ -907,13 +907,16 @@ input:focus, textarea:focus, select:focus {
 .plan-top h3 { margin: 0; color: var(--bc-white); font-size: 18px; }
 .plan-top p { margin: 5px 0 0; color: var(--bc-muted); font-size: 12px; font-weight: 500; }
 
-.metrics { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin: 18px 0; }
+/* Four metrics across one row. They stack icon-over-text so the labels still fit
+   inside the 480px app shell. */
+.metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 7px; margin: 18px 0; }
 .metrics > * { min-width: 0; }
 .plan-metric {
   display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 11px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 10px 8px;
   border: 1px solid var(--bc-line-soft);
   border-radius: 12px;
   background: rgba(255, 255, 255, .022);
@@ -921,9 +924,9 @@ input:focus, textarea:focus, select:focus {
 }
 .plan-metric:hover { border-color: rgba(255, 196, 0, .3); background: rgba(255, 196, 0, .05); }
 .plan-metric i { flex: 0 0 auto; display: grid; place-items: center; color: var(--bc-gold); }
-.plan-metric i svg { width: 17px; }
-.plan-metric span { display: flex; flex-direction: column; min-width: 0; font-size: 9.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--bc-muted-2); }
-.plan-metric b { margin-top: 4px; font-family: var(--bc-display); font-weight: 400; font-size: 16px; letter-spacing: .01em; color: var(--bc-white); text-transform: none; overflow-wrap: anywhere; }
+.plan-metric i svg { width: 15px; }
+.plan-metric span { display: flex; flex-direction: column; min-width: 0; width: 100%; font-size: 8.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--bc-muted-2); }
+.plan-metric b { margin-top: 4px; font-family: var(--bc-display); font-weight: 400; font-size: 14px; letter-spacing: .01em; color: var(--bc-white); text-transform: none; overflow-wrap: anywhere; }
 .plan-metric-return b, .plan-metric-revenue b { color: var(--bc-gold); }
 
 .plan-assurance { display: flex; flex-wrap: wrap; gap: 6px 12px; margin-bottom: 14px; }
@@ -936,7 +939,7 @@ input:focus, textarea:focus, select:focus {
 .gallery-view .professional-plan-card .plan-company, .gallery-view .plan-verified, .gallery-view .plan-gain-badge { display: none; }
 .gallery-view .professional-plan-card .calendar { display: none; }
 .gallery-view .plan-assurance { display: none; }
-.gallery-view .metrics { grid-template-columns: 1fr; gap: 7px; margin: 12px 0; }
+.gallery-view .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; margin: 12px 0; }
 .gallery-view .plan-top h3 { font-size: 15px; }
 .gallery-view .primary { padding: 12px 10px; font-size: 11px; letter-spacing: .05em; }
 
@@ -3025,7 +3028,7 @@ header > div, .plan-top > div, .profile-head > div, .settings span, .activity sp
   .actions { gap: 9px; }
   .actions button { height: 68px; gap: 7px; font-size: 12.5px; }
   .plan-card { padding: 13px; }
-  .metrics { gap: 8px; }
+  .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
   .modal { padding: 24px 16px calc(24px + env(safe-area-inset-bottom)); }
   .qr-actions { grid-template-columns: 1fr; }
   .settings > div, .settings > .settings-row { padding: 13px 12px; }
