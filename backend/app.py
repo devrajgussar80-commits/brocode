@@ -35,23 +35,39 @@ PUBLIC_APP_URL = os.getenv("PUBLIC_APP_URL", "https://speedaccountingdevraj.pyth
 DEFAULT_TELEGRAM_URL = "https://t.me/BajjajFinanceDigitalService"
 # Amount chips offered on the recharge screen. Stored as a comma-separated
 # setting so admins can edit, add and remove them without a deploy.
-DEFAULT_RECHARGE_PRESETS = "100,570,1000,1970,5000"
-MAX_RECHARGE_PRESETS = 8
+DEFAULT_RECHARGE_CHIPS = [100, 570, 1000, 1970, 5000]
+DEFAULT_WITHDRAWAL_CHIPS = [1000, 2500, 5000, 10000]
+MAX_AMOUNT_CHIPS = 12
 
 
-def parse_recharge_presets(raw: str | None) -> list[int]:
-    values: list[int] = []
-    for chunk in (raw or DEFAULT_RECHARGE_PRESETS).split(","):
-        chunk = chunk.strip()
-        if not chunk:
-            continue
+def parse_amount_chips(raw, fallback):
+    """Chips are stored as JSON: [{"amount": 100, "enabled": true}, ...].
+
+    Falls back to the defaults when the setting is missing or unreadable so the
+    recharge and withdrawal screens always have something to show.
+    """
+    chips, seen = [], set()
+    try:
+        rows = json.loads(raw) if raw else []
+    except (ValueError, TypeError):
+        rows = []
+    for row in rows if isinstance(rows, list) else []:
         try:
-            amount = int(chunk)
-        except ValueError:
+            amount = int(row.get("amount") if isinstance(row, dict) else row)
+        except (TypeError, ValueError):
             continue
-        if 1 <= amount <= 100000 and amount not in values:
-            values.append(amount)
-    return values or [int(x) for x in DEFAULT_RECHARGE_PRESETS.split(",")]
+        if not (1 <= amount <= 1000000) or amount in seen:
+            continue
+        seen.add(amount)
+        enabled = bool(row.get("enabled", True)) if isinstance(row, dict) else True
+        chips.append({"amount": amount, "enabled": enabled})
+        if len(chips) >= MAX_AMOUNT_CHIPS:
+            break
+    return chips or [{"amount": a, "enabled": True} for a in fallback]
+
+
+def serialise_amount_chips(chips):
+    return json.dumps([{"amount": c["amount"], "enabled": c["enabled"]} for c in chips])
 REFERRAL_BONUS = 50
 SIGNUP_BONUS = 50
 WITHDRAWAL_FEE_PERCENT = 5
@@ -206,7 +222,8 @@ def init_db():
         con.execute("INSERT OR IGNORE INTO app_settings(key,value,updated_at) VALUES('telegram_url',?,?)", (DEFAULT_TELEGRAM_URL,now_iso()))
         con.execute("INSERT OR IGNORE INTO app_settings(key,value,updated_at) VALUES('minimum_recharge','100',?)", (now_iso(),))
         con.execute("INSERT OR IGNORE INTO app_settings(key,value,updated_at) VALUES('first_recharge_amount','100',?)", (now_iso(),))
-        con.execute("INSERT OR IGNORE INTO app_settings(key,value,updated_at) VALUES('recharge_presets',?,?)", (DEFAULT_RECHARGE_PRESETS,now_iso()))
+        con.execute("INSERT OR IGNORE INTO app_settings(key,value,updated_at) VALUES('recharge_chips',?,?)", (serialise_amount_chips(parse_amount_chips(None, DEFAULT_RECHARGE_CHIPS)),now_iso()))
+        con.execute("INSERT OR IGNORE INTO app_settings(key,value,updated_at) VALUES('withdrawal_chips',?,?)", (serialise_amount_chips(parse_amount_chips(None, DEFAULT_WITHDRAWAL_CHIPS)),now_iso()))
         con.execute("INSERT INTO app_settings(key,value,updated_at) VALUES('payment_qr_mode','uploaded',?) ON CONFLICT(key) DO UPDATE SET value='uploaded',updated_at=excluded.updated_at", (now_iso(),))
         if con.execute("SELECT COUNT(*) FROM plan_catalog").fetchone()[0] == 0:
             for sort_order, (plan_id, plan) in enumerate(PLANS.items()):
@@ -448,6 +465,10 @@ class AdminPlanOrderInput(BaseModel):
     plan_ids: list[str] = Field(min_length=1, max_length=100)
 class CompanyNameInput(BaseModel):
     company_name: str = Field(min_length=3, max_length=80)
+class AmountChipsInput(BaseModel):
+    recharge: list[dict] = Field(default_factory=list)
+    withdrawal: list[dict] = Field(default_factory=list)
+
 class TelegramUrlInput(BaseModel):
     telegram_url: str = Field(min_length=8, max_length=300)
 class AdminRechargeSettingsInput(BaseModel):
@@ -563,7 +584,11 @@ def public_config(response: Response):
             or (HOME_BANNER_DIR / Path(banner_name).name).exists()
         )
         home_banner_url = f"/api/home-banner?v={settings.get('home_banner_updated_at', '')}" if banner_on_disk else ""
-        return {"company_name": settings.get("company_name", "BroCode"), "telegram_url": settings.get("telegram_url", DEFAULT_TELEGRAM_URL), "minimum_recharge":int(settings.get("minimum_recharge", "100")), "first_recharge_amount":int(settings.get("first_recharge_amount", "100")), "home_banner_url":home_banner_url, "welcome_popup":welcome_popup, "plans": [{"id":row["id"],"name":row["name"],"category":row["category"],"days":row["days"],"durationUnit":row["duration_unit"],"amount":row["amount"],"totalReturn":row["total_return"],"dailyEarning":row["daily_earning"],"payoutMode":row["payout_mode"],"limit":row["purchase_limit"],"comingSoon":bool(row["coming_soon"]),"planLocked":bool(row["plan_locked"]),"vipLocked":bool(row["vip_locked"]),"vipActivation":bool(row["vip_activation"]),"imageAutoFit":bool(row["image_auto_fit"]),"imageUrl":f"/api/plan-images/{row['id']}?v={row['image_updated_at'] or row['updated_at']}" if row["image_name"] else ""} for row in plan_rows],"payment_qrs":qr_rows,"crypto_wallets":wallets}
+        recharge_chips = parse_amount_chips(settings.get("recharge_chips"), DEFAULT_RECHARGE_CHIPS)
+        withdrawal_chips = parse_amount_chips(settings.get("withdrawal_chips"), DEFAULT_WITHDRAWAL_CHIPS)
+        return {"recharge_presets": [c["amount"] for c in recharge_chips if c["enabled"]],
+                "withdrawal_presets": [c["amount"] for c in withdrawal_chips if c["enabled"]],
+                "company_name": settings.get("company_name", "BroCode"), "telegram_url": settings.get("telegram_url", DEFAULT_TELEGRAM_URL), "minimum_recharge":int(settings.get("minimum_recharge", "100")), "first_recharge_amount":int(settings.get("first_recharge_amount", "100")), "home_banner_url":home_banner_url, "welcome_popup":welcome_popup, "plans": [{"id":row["id"],"name":row["name"],"category":row["category"],"days":row["days"],"durationUnit":row["duration_unit"],"amount":row["amount"],"totalReturn":row["total_return"],"dailyEarning":row["daily_earning"],"payoutMode":row["payout_mode"],"limit":row["purchase_limit"],"comingSoon":bool(row["coming_soon"]),"planLocked":bool(row["plan_locked"]),"vipLocked":bool(row["vip_locked"]),"vipActivation":bool(row["vip_activation"]),"imageAutoFit":bool(row["image_auto_fit"]),"imageUrl":f"/api/plan-images/{row['id']}?v={row['image_updated_at'] or row['updated_at']}" if row["image_name"] else ""} for row in plan_rows],"payment_qrs":qr_rows,"crypto_wallets":wallets}
 
 @app.get("/api/home-banner", include_in_schema=False)
 def home_banner():
@@ -1515,6 +1540,19 @@ def update_company_name(p: CompanyNameInput):
     value = " ".join(p.company_name.split())
     with db() as con: con.execute("INSERT INTO app_settings(key,value,updated_at) VALUES('company_name',?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at", (value,now_iso()))
     return {"company_name":value}
+
+@app.post("/api/admin/settings/amount-chips", dependencies=[Depends(require_admin)])
+def update_amount_chips(p: AmountChipsInput):
+    recharge = parse_amount_chips(json.dumps(p.recharge), DEFAULT_RECHARGE_CHIPS)
+    withdrawal = parse_amount_chips(json.dumps(p.withdrawal), DEFAULT_WITHDRAWAL_CHIPS)
+    if not any(c["enabled"] for c in recharge):
+        raise HTTPException(400, "Keep at least one recharge amount enabled")
+    updated_at = now_iso()
+    with db() as con:
+        for key, chips in (("recharge_chips", recharge), ("withdrawal_chips", withdrawal)):
+            con.execute("INSERT INTO app_settings(key,value,updated_at) VALUES(?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at",
+                        (key, serialise_amount_chips(chips), updated_at))
+    return {"recharge": recharge, "withdrawal": withdrawal}
 
 @app.post("/api/admin/settings/telegram-url", dependencies=[Depends(require_admin)])
 def update_telegram_url(p: TelegramUrlInput):

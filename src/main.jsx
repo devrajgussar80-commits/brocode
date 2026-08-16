@@ -38,6 +38,7 @@ function App() {
   const [assignedManualQrId, setAssignedManualQrId] = useState(null);
   const [minimumRecharge, setMinimumRecharge] = useState(100);
   const [firstRechargeAmount, setFirstRechargeAmount] = useState(100);
+  const [rechargePresetsFromConfig, setRechargePresetsFromConfig] = useState([]);
   const [customerPlans, setCustomerPlans] = useState(defaultPlans);
   const [companyName, setCompanyName] = useState(COMPANY_NAME);
   const [telegramUrl, setTelegramUrl] = useState(DEFAULT_TELEGRAM_URL);
@@ -89,6 +90,7 @@ function App() {
       if (Number(config.minimum_recharge) > 0) setMinimumRecharge(Number(config.minimum_recharge));
       if (Number(config.first_recharge_amount) > 0) setFirstRechargeAmount(Number(config.first_recharge_amount));
       if (config.home_banner_url) setHomeBannerUrl(config.home_banner_url);
+      if (Array.isArray(config.recharge_presets) && config.recharge_presets.length) setRechargePresetsFromConfig(config.recharge_presets);
       if (config.welcome_popup) setWelcomePopup(config.welcome_popup);
       if (Array.isArray(config.plans) && config.plans.length) setCustomerPlans(config.plans);
       if (Array.isArray(config.payment_qrs)) setPaymentQrs(config.payment_qrs.map((row) => ({ id: row.id, upiId: row.upi_id, payee: row.payee, adminLabel: row.admin_label || "", source: row.source || "manual", imageUrl: row.image_url || "", preferred: Boolean(row.preferred) })));
@@ -394,7 +396,7 @@ function App() {
           paymentQrs={paymentQrs}
           cryptoWallets={cryptoWallets}
           minimumRecharge={minimumRecharge}
-          rechargePresets={[firstRechargeAmount, ...DEFAULT_RECHARGE_PRESETS.slice(1)]}
+          rechargePresets={rechargePresetsFromConfig.length ? rechargePresetsFromConfig : [firstRechargeAmount, ...DEFAULT_RECHARGE_PRESETS.slice(1)]}
           minimumWithdrawal={1000}
           withdrawalAvailable={withdrawalAvailable}
           withdrawalMessage={withdrawalMessage}

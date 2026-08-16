@@ -429,6 +429,77 @@ function AdminQrRow({ qr, busy, onSave, onRemove }) {
   </form>;
 }
 
+
+function AdminAmountChips({ settings, busy, onSave }) {
+  const read = (key, fallback) => {
+    try {
+      const rows = JSON.parse(settings?.[key] || "[]");
+      if (Array.isArray(rows) && rows.length) {
+        return rows.map((r) => ({ amount: Number(r.amount) || 0, enabled: r.enabled !== false }));
+      }
+    } catch { /* fall through to defaults */ }
+    return fallback.map((a) => ({ amount: a, enabled: true }));
+  };
+  const [recharge, setRecharge] = useState(() => read("recharge_chips", [100, 570, 1000, 1970, 5000]));
+  const [withdrawal, setWithdrawal] = useState(() => read("withdrawal_chips", [1000, 2500, 5000, 10000]));
+  const [draft, setDraft] = useState({ recharge: "", withdrawal: "" });
+  useEffect(() => {
+    setRecharge(read("recharge_chips", [100, 570, 1000, 1970, 5000]));
+    setWithdrawal(read("withdrawal_chips", [1000, 2500, 5000, 10000]));
+  }, [settings?.recharge_chips, settings?.withdrawal_chips]);
+
+  const lists = { recharge: [recharge, setRecharge], withdrawal: [withdrawal, setWithdrawal] };
+  const addChip = (kind) => {
+    const amount = parseInt(draft[kind], 10);
+    const [list, setList] = lists[kind];
+    if (!Number.isInteger(amount) || amount < 1 || amount > 1000000) return;
+    if (list.some((c) => c.amount === amount)) return;
+    setList([...list, { amount, enabled: true }].sort((a, b) => a.amount - b.amount));
+    setDraft({ ...draft, [kind]: "" });
+  };
+  const toggleChip = (kind, amount) => {
+    const [list, setList] = lists[kind];
+    setList(list.map((c) => (c.amount === amount ? { ...c, enabled: !c.enabled } : c)));
+  };
+  const removeChip = (kind, amount) => {
+    const [list, setList] = lists[kind];
+    setList(list.filter((c) => c.amount !== amount));
+  };
+
+  const renderGroup = (kind, title, hint) => {
+    const [list] = lists[kind];
+    return <div className="amount-chip-group">
+      <div className="amount-chip-head"><b>{title}</b><small>{hint}</small></div>
+      <div className="amount-chip-list">
+        {list.length ? list.map((chip) => (
+          <span className={`amount-chip${chip.enabled ? " on" : " off"}`} key={chip.amount}>
+            <button type="button" onClick={() => toggleChip(kind, chip.amount)}
+              title={chip.enabled ? "Disable this amount" : "Enable this amount"}
+              aria-pressed={chip.enabled}>₹{chip.amount.toLocaleString("en-IN")}</button>
+            <button type="button" className="amount-chip-remove" aria-label={`Remove ₹${chip.amount}`}
+              onClick={() => removeChip(kind, chip.amount)}>×</button>
+          </span>
+        )) : <em className="amount-chip-empty">No amounts yet</em>}
+      </div>
+      <div className="amount-chip-add">
+        <input type="number" min="1" max="1000000" inputMode="numeric" placeholder="Add amount"
+          value={draft[kind]} onChange={(event) => setDraft({ ...draft, [kind]: event.target.value })}
+          onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); addChip(kind); } }} />
+        <button type="button" onClick={() => addChip(kind)}>Add</button>
+      </div>
+    </div>;
+  };
+
+  return <section className="admin-amount-chips">
+    <div className="admin-qr-intro"><b>Recharge &amp; Withdrawal Amounts</b>
+      <small>Amount buttons shown to customers. Disabled amounts stay saved but are hidden from the app.</small></div>
+    {renderGroup("recharge", "Recharge amounts", "Shown on the recharge screen")}
+    {renderGroup("withdrawal", "Withdrawal amounts", "Suggested amounts on the withdrawal screen")}
+    <button className="primary" disabled={busy}
+      onClick={() => onSave({ recharge, withdrawal })}>Save Amount Buttons</button>
+  </section>;
+}
+
 function AdminQrManager({ qrs, busy, onSave, onRemove }) {
   const [uploadedUpiId, setUploadedUpiId] = useState("");
   const [uploadedPayee, setUploadedPayee] = useState("");
@@ -1099,6 +1170,16 @@ function AdminDashboard() {
     } catch (err) { setError(err.message || "Company name update failed"); setBusy(false); }
   };
 
+  const saveAmountChips = async (chips) => {
+    setBusy(true); setError("");
+    try {
+      const response = await fetch("/api/admin/settings/amount-chips", { method: "POST", headers: { "Content-Type": "application/json", "X-Admin-Token": token }, body: JSON.stringify(chips) });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(apiErrorMessage(body.detail, "Amount buttons update failed"));
+      await load(); setAdminNotice("Recharge and withdrawal amounts updated.");
+    } catch (err) { setError(err.message || "Amount buttons update failed"); setBusy(false); }
+  };
+
   const saveTelegramUrl = async (telegramUrl) => {
     setBusy(true); setError("");
     try {
@@ -1303,7 +1384,7 @@ function AdminDashboard() {
         {section === "withdrawal_receipt_time" ? <AdminWithdrawalReceiptTime allWithdrawals={data?.withdrawals || []} users={data?.users || []} busy={busy} onSave={saveWithdrawalReceiptTime} onDelete={deleteWithdrawalReceipt} onReorder={saveWithdrawalReceiptOrder} onAdjustBalance={adjustUserBalance} /> : null}
         {section === "active_plans" ? <table><thead><tr><th>User</th><th>Plan</th><th>Invested</th><th>Total return</th><th>Duration</th><th>Purchased</th><th>Status</th></tr></thead><tbody>{rows.map((p) => <tr key={p.id}><td><b>{p.name} <span className="inline-public-id">#{p.public_id}</span></b><small>{p.email}<br /><code>{p.user_id}</code></small></td><td><code>{p.plan_id}</code></td><td>₹{money(p.invested)}</td><td>₹{money(p.total_return)}</td><td>{durationLabel(p.duration_days, p.duration_unit)}</td><td>{dateTime(p.purchased_at)}</td><td><span className={`status ${p.status}`}>{p.status}</span></td></tr>)}</tbody></table> : null}
         {section === "activity" ? <table><thead><tr><th>User</th><th>Type</th><th>Purchased Plan</th><th>Amount</th><th>Reference</th><th>Date</th></tr></thead><tbody>{rows.map((a) => <tr key={a.id}><td><b>{a.name} <span className="inline-public-id">#{a.public_id}</span></b><small>{a.email}<br /><code>{a.user_id}</code></small></td><td>{a.kind.replaceAll("_", " ")}</td><td>{a.kind === "plan_purchase" ? <><b>{a.purchased_plan_name || "Purchased plan"}</b><small>{a.purchased_plan_id ? <>Plan ID: <code>{a.purchased_plan_id}</code></> : "Plan details unavailable"}{a.purchased_plan_quantity > 1 ? ` • ${a.purchased_plan_quantity} orders` : ""}</small></> : <span className="status offline">—</span>}</td><td className={a.amount >= 0 ? "amount-positive" : "amount-negative"}>{a.amount >= 0 ? "+" : "-"}₹{money(Math.abs(a.amount))}</td><td><code>{a.reference || "—"}</code></td><td>{dateTime(a.created_at)}</td></tr>)}</tbody></table> : null}
-        {section === "payment_qrs" ? <AdminQrManager qrs={rows} busy={busy} mode={data?.settings?.payment_qr_mode || "manual"} onMode={paymentQrModeAction} onSave={paymentQrAction} onRemove={removePaymentQr} /> : null}
+        {section === "payment_qrs" ? <><AdminAmountChips settings={data?.settings} busy={busy} onSave={saveAmountChips} /><AdminQrManager qrs={rows} busy={busy} mode={data?.settings?.payment_qr_mode || "manual"} onMode={paymentQrModeAction} onSave={paymentQrAction} onRemove={removePaymentQr} /></> : null}
         {section === "crypto" ? <AdminCryptoManager wallets={data?.crypto_wallets || []} requests={rows} busy={busy} onSave={cryptoWalletAction} onRemove={removeCryptoWallet} onAction={adminAction} /> : null}
         {section === "referrals" ? <table><thead><tr><th>Referred User</th><th>Referred By</th><th>Referral Code</th><th>Registered</th><th>First Approved Recharge</th><th>Reward</th><th>Status / Action</th></tr></thead><tbody>{rows.map((r) => <tr key={r.referred_user_id}><td><b>{r.referred_name} <span className="inline-public-id">#{r.referred_public_id}</span></b><small>{r.referred_email}<br /><code>{r.referred_user_id}</code></small></td><td><b>{r.referrer_name} <span className="inline-public-id">#{r.referrer_public_id}</span></b><small>{r.referrer_email}<br /><code>{r.referrer_user_id}</code></small></td><td><span className="public-id">SC{r.referrer_public_id}</span></td><td>{dateTime(r.referred_created_at)}</td><td>{r.first_recharge_amount != null ? <><b>₹{money(r.first_recharge_amount)}</b><small>{dateTime(r.first_recharge_approved_at)}</small></> : <small>No approved recharge yet</small>}</td><td><b>₹{money(r.reward_amount)}</b><small>Credits to referrer</small></td><td>{r.status === "pending" ? <div className="row-actions"><button className="approve" disabled={busy} onClick={() => adminAction(`/api/admin/referrals/${r.referred_user_id}/approve`)}>Approve ₹{money(r.reward_amount)}</button></div> : r.status === "referrer_locked" ? <><span className="status rejected">Locked</span><small>Referrer must deposit first</small></> : r.status === "awaiting_deposit" ? <><span className="status awaiting_utr">Waiting</span><small>Referred user has not deposited</small></> : <><span className="status approved">Approved</span><small>{dateTime(r.rewarded_at)}</small></>}</td></tr>)}</tbody></table> : null}
         {section === "signup_bonuses" ? <table><thead><tr><th>User</th><th>Customer ID</th><th>Bonus</th><th>Reference</th><th>Signup Date</th></tr></thead><tbody>{rows.map((bonus) => <tr key={bonus.id}><td><b>{bonus.name}</b><small>{bonus.email}<br /><code>{bonus.user_id}</code></small></td><td><span className="public-id">#{bonus.public_id}</span></td><td className="amount-positive"><b>+₹{money(bonus.amount)}</b><small>Credited instantly</small></td><td><code>{bonus.reference}</code></td><td>{dateTime(bonus.created_at)}</td></tr>)}</tbody></table> : null}

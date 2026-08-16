@@ -1316,3 +1316,21 @@ nav button{min-width:0;padding:2px}
 .admin-receipt-row-actions .delete-receipt{grid-column:1/-1;display:inline-flex;align-items:center;justify-content:center;gap:5px;background:#c44242}.admin-receipt-row-actions .delete-receipt svg{width:13px}
 .admin-receipt-edit-fields .receipt-reference-field{grid-column:1/-1}.admin-receipt-edit-fields .receipt-reference-field input{min-width:100%}
 .admin-receipt-wallet-control{display:grid;grid-template-columns:minmax(250px,.7fr) minmax(560px,1.3fr);gap:16px;align-items:end;padding:16px 20px;border-bottom:1px solid #dce7ee;background:#f3f9f7}.admin-receipt-wallet-summary{display:grid;grid-template-columns:1fr auto;gap:3px 12px;align-items:center}.admin-receipt-wallet-summary>span{grid-column:1/-1;color:#65778b;font-size:9px;font-weight:900;text-transform:uppercase}.admin-receipt-wallet-summary>b{color:#15385c;font-size:13px}.admin-receipt-wallet-summary>b small{color:#087e60}.admin-receipt-wallet-summary>strong{grid-row:2;font-size:22px;color:#07825f}.admin-receipt-wallet-form{display:grid;grid-template-columns:130px minmax(190px,1fr) auto auto;gap:8px;align-items:end}.admin-receipt-wallet-form label{display:grid;gap:5px;color:#65778b;font-size:9px;font-weight:900;text-transform:uppercase}.admin-receipt-wallet-form input{height:40px;border:1px solid #c8d6e3;border-radius:9px;background:#fff;padding:0 10px;color:#17375d;font:inherit;font-size:11px}.admin-receipt-wallet-form button{display:inline-flex;height:40px;align-items:center;justify-content:center;gap:5px;border:0;border-radius:9px;padding:0 12px;color:#fff;font-size:10px;font-weight:900}.admin-receipt-wallet-form button svg{width:14px}.admin-receipt-wallet-form .wallet-credit{background:#078d69}.admin-receipt-wallet-form .wallet-debit{background:#c44242}.admin-dark .admin-receipt-wallet-control{border-color:#2b4058;background:#10263a}.admin-dark .admin-receipt-wallet-summary>b{color:#eef5ff}.admin-dark .admin-receipt-wallet-form input{border-color:#40536d;background:#1c2d46;color:#eef5ff}@media(max-width:900px){.admin-receipt-wallet-control{grid-template-columns:1fr}.admin-receipt-wallet-form{grid-template-columns:1fr 1fr}.admin-receipt-wallet-form button{width:100%}}
+
+
+/* Recharge & withdrawal amount buttons (admin > QR Codes) */
+.admin-amount-chips { display: grid; gap: 16px; margin-bottom: 18px; }
+.amount-chip-group { display: grid; gap: 10px; }
+.amount-chip-head b { display: block; font-size: 14px; }
+.amount-chip-head small { display: block; margin-top: 2px; opacity: .7; font-size: 12px; }
+.amount-chip-list { display: flex; flex-wrap: wrap; gap: 8px; }
+.amount-chip { display: inline-flex; align-items: stretch; border-radius: 999px; overflow: hidden; border: 1px solid currentColor; }
+.amount-chip > button { border: 0; background: transparent; color: inherit; padding: 8px 14px; font-weight: 700; font-size: 13px; cursor: pointer; }
+.amount-chip.on { color: #16a34a; background: rgba(22,163,74,.12); }
+.amount-chip.off { color: #94a3b8; background: rgba(148,163,184,.12); text-decoration: line-through; }
+.amount-chip-remove { padding: 0 10px !important; font-size: 16px !important; opacity: .7; border-left: 1px solid currentColor !important; }
+.amount-chip-remove:hover { opacity: 1; color: #dc2626; }
+.amount-chip-empty { opacity: .6; font-size: 12px; }
+.amount-chip-add { display: flex; gap: 8px; flex-wrap: wrap; }
+.amount-chip-add input { flex: 1 1 140px; min-width: 0; }
+.amount-chip-add button { flex: 0 0 auto; padding: 0 18px; min-height: 40px; border-radius: 10px; cursor: pointer; }
