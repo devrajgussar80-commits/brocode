@@ -54,7 +54,8 @@ import {
   Zap,
   Trash2,
 } from "lucide-react";
-import "./styles.css";
+// styles.css is imported by the customer entry (main.jsx), not here: the admin
+// bundle also imports this module and must not inherit the customer theme.
 
 /* Cross-origin API base.
  *

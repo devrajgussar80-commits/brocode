@@ -15,6 +15,7 @@ import {
   WithdrawalBlogPage, anonymousTrackingId, clearCustomerSession, cryptoAssetLabel, defaultPlans, durationLabel,
   money, readCustomerSession, storeCustomerSession, API_BASE, DEFAULT_RECHARGE_PRESETS,
 } from "./shared.jsx";
+import "./styles.css";
 
 function App() {
   const [auth, setAuth] = useState(readCustomerSession),
